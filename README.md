@@ -409,7 +409,7 @@ npx prisma migrate reset
 
 ## License
 
-MIT
+Apache-2.0 license
 
 ## Support
 
