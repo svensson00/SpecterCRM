@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head><title>API Test</title></head>
+<body>
+<h1>Organization API Test</h1>
+<button onclick="testAPI()">Test API</button>
+<pre id="result"></pre>
+<script>
+async function testAPI() {
+  const token = localStorage.getItem('accessToken');
+  const result = document.getElementById('result');
+  
+  if (!token) {
+    result.textContent = 'ERROR: Not logged in. Please login first at http://localhost:5173';
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/organizations?page=1&limit=20', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    result.textContent = 'Status: ' + response.status + '\n\n' + JSON.stringify(data, null, 2);
+  } catch (error) {
+    result.textContent = 'ERROR: ' + error.message;
+  }
+}
+</script>
+</body>
+</html>

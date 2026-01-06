@@ -1,0 +1,80 @@
+import { Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
+import { DealService } from '../services/deal.service';
+import { NoteService } from '../services/note.service';
+import { dealSchema, paginationSchema, noteSchema } from '../utils/validation';
+import { DealStage } from '@prisma/client';
+
+export class DealController {
+  static async create(req: AuthRequest, res: Response) {
+    const data = dealSchema.parse(req.body);
+    const deal = await DealService.create(data, req.user!.tenantId, req.user!.userId);
+    res.status(201).json(deal);
+  }
+
+  static async findAll(req: AuthRequest, res: Response) {
+    const pagination = paginationSchema.parse(req.query);
+    const result = await DealService.findAll({
+      tenantId: req.user!.tenantId,
+      stage: req.query.stage as DealStage,
+      ownerUserId: req.query.ownerUserId as string,
+      organizationId: req.query.organizationId as string,
+      search: req.query.search as string,
+      ...pagination,
+    });
+    res.json(result);
+  }
+
+  static async findById(req: AuthRequest, res: Response) {
+    const deal = await DealService.findById(req.params.id, req.user!.tenantId);
+    res.json(deal);
+  }
+
+  static async update(req: AuthRequest, res: Response) {
+    const data = dealSchema.partial().parse(req.body);
+    const deal = await DealService.update(
+      req.params.id,
+      data,
+      req.user!.tenantId,
+      req.user!.userId
+    );
+    res.json(deal);
+  }
+
+  static async updateStage(req: AuthRequest, res: Response) {
+    const { stage, reasonLost } = req.body;
+    const deal = await DealService.updateStage(
+      req.params.id,
+      stage as DealStage,
+      reasonLost,
+      req.user!.tenantId,
+      req.user!.userId
+    );
+    res.json(deal);
+  }
+
+  static async delete(req: AuthRequest, res: Response) {
+    await DealService.delete(req.params.id, req.user!.tenantId, req.user!.userId);
+    res.status(204).send();
+  }
+
+  static async getNotes(req: AuthRequest, res: Response) {
+    const notes = await NoteService.findByEntity('DEAL', req.params.id, req.user!.tenantId);
+    res.json(notes);
+  }
+
+  static async createNote(req: AuthRequest, res: Response) {
+    const { content } = noteSchema.parse(req.body);
+    const note = await NoteService.create(
+      { content, entityType: 'DEAL', entityId: req.params.id },
+      req.user!.tenantId,
+      req.user!.userId
+    );
+    res.status(201).json(note);
+  }
+
+  static async getPipeline(req: AuthRequest, res: Response) {
+    const pipeline = await DealService.getPipeline(req.user!.tenantId);
+    res.json(pipeline);
+  }
+}

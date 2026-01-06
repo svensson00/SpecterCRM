@@ -1,0 +1,464 @@
+// SpecterCRM Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Multi-tenancy & Authentication
+// ============================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  currency  String   @default("USD")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users                 User[]
+  organizations         Organization[]
+  contacts              Contact[]
+  deals                 Deal[]
+  activities            Activity[]
+  notes                 Note[]
+  activityTypes         ActivityType[]
+  contactRoles          ContactRole[]
+  duplicateSuggestions  DuplicateSuggestion[]
+  auditLogs             AuditLog[]
+  importJobs            ImportJob[]
+
+  @@map("tenants")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  email        String
+  passwordHash String   @map("password_hash")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  role         UserRole @default(USER)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  ownedOrganizations        Organization[] @relation("OrganizationOwner")
+  createdOrganizations      Organization[] @relation("OrganizationCreatedBy")
+  updatedOrganizations      Organization[] @relation("OrganizationUpdatedBy")
+
+  ownedContacts             Contact[]      @relation("ContactOwner")
+  createdContacts           Contact[]      @relation("ContactCreatedBy")
+  updatedContacts           Contact[]      @relation("ContactUpdatedBy")
+
+  ownedDeals                Deal[]         @relation("DealOwner")
+  createdDeals              Deal[]         @relation("DealCreatedBy")
+  updatedDeals              Deal[]         @relation("DealUpdatedBy")
+
+  ownedActivities           Activity[]     @relation("ActivityOwner")
+  createdActivities         Activity[]     @relation("ActivityCreatedBy")
+  updatedActivities         Activity[]     @relation("ActivityUpdatedBy")
+
+  createdNotes              Note[]         @relation("NoteCreatedBy")
+  updatedNotes              Note[]         @relation("NoteUpdatedBy")
+
+  savedFilters              SavedFilter[]
+  auditLogs                 AuditLog[]
+  reviewedDuplicates        DuplicateSuggestion[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// ============================================
+// CRM Entities
+// ============================================
+
+model Organization {
+  id              String   @id @default(cuid())
+  tenantId        String   @map("tenant_id")
+  name            String
+  website         String?
+  street          String?
+  city            String?
+  zip             String?
+  country         String?
+  ownerUserId     String?  @map("owner_user_id")
+  createdByUserId String   @map("created_by_user_id")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner      User?   @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  createdBy  User    @relation("OrganizationCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy  User?   @relation("OrganizationUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  contacts   Contact[]
+  deals      Deal[]
+  activities Activity[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([ownerUserId])
+  @@index([name])
+  @@map("organizations")
+}
+
+model Contact {
+  id                    String   @id @default(cuid())
+  tenantId              String   @map("tenant_id")
+  firstName             String   @map("first_name")
+  lastName              String   @map("last_name")
+  jobTitle              String?  @map("job_title")
+  contactRole           String?  @map("contact_role")
+  primaryOrganizationId String   @map("primary_organization_id")
+  ownerUserId           String?  @map("owner_user_id")
+  createdByUserId       String   @map("created_by_user_id")
+  updatedByUserId       String?  @map("updated_by_user_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  tenant              Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  primaryOrganization Organization @relation(fields: [primaryOrganizationId], references: [id], onDelete: Restrict)
+  owner               User?        @relation("ContactOwner", fields: [ownerUserId], references: [id])
+  createdBy           User         @relation("ContactCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy           User?        @relation("ContactUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  emails          ContactEmail[]
+  phones          ContactPhone[]
+  deals           DealContact[]
+  activities      ActivityContact[]
+
+  @@index([tenantId])
+  @@index([primaryOrganizationId])
+  @@index([ownerUserId])
+  @@index([firstName, lastName])
+  @@map("contacts")
+}
+
+model ContactEmail {
+  id        String   @id @default(cuid())
+  contactId String   @map("contact_id")
+  email     String
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([email])
+  @@map("contact_emails")
+}
+
+model ContactPhone {
+  id        String   @id @default(cuid())
+  contactId String   @map("contact_id")
+  phone     String
+  type      String?
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@map("contact_phones")
+}
+
+enum DealStage {
+  LEAD
+  PROSPECT
+  QUOTE
+  WON
+  LOST
+}
+
+model Deal {
+  id                String    @id @default(cuid())
+  tenantId          String    @map("tenant_id")
+  title             String
+  organizationId    String    @map("organization_id")
+  amount            Float?
+  currency          String?   @default("USD")
+  expectedCloseDate DateTime? @map("expected_close_date")
+  stage             DealStage @default(LEAD)
+  probability       Int?
+  reasonLost        String?   @map("reason_lost")
+  ownerUserId       String?   @map("owner_user_id")
+  createdByUserId   String    @map("created_by_user_id")
+  updatedByUserId   String?   @map("updated_by_user_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner        User?        @relation("DealOwner", fields: [ownerUserId], references: [id])
+  createdBy    User         @relation("DealCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy    User?        @relation("DealUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  contacts   DealContact[]
+  activities Activity[]
+
+  @@index([tenantId])
+  @@index([organizationId])
+  @@index([ownerUserId])
+  @@index([stage])
+  @@index([expectedCloseDate])
+  @@map("deals")
+}
+
+model DealContact {
+  dealId    String @map("deal_id")
+  contactId String @map("contact_id")
+
+  deal    Deal    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([dealId, contactId])
+  @@map("deal_contacts")
+}
+
+model Activity {
+  id                      String    @id @default(cuid())
+  tenantId                String    @map("tenant_id")
+  type                    String
+  subject                 String
+  description             String?
+  dueAt                   DateTime? @map("due_at")
+  isCompleted             Boolean   @default(false) @map("is_completed")
+  completedAt             DateTime? @map("completed_at")
+  ownerUserId             String?   @map("owner_user_id")
+  relatedOrganizationId   String?   @map("related_organization_id")
+  relatedDealId           String?   @map("related_deal_id")
+  createdByUserId         String    @map("created_by_user_id")
+  updatedByUserId         String?   @map("updated_by_user_id")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner               User?         @relation("ActivityOwner", fields: [ownerUserId], references: [id])
+  relatedOrganization Organization? @relation(fields: [relatedOrganizationId], references: [id], onDelete: Cascade)
+  relatedDeal         Deal?         @relation(fields: [relatedDealId], references: [id], onDelete: Cascade)
+  createdBy           User          @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy           User?         @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  contacts ActivityContact[]
+
+  @@index([tenantId])
+  @@index([ownerUserId])
+  @@index([type])
+  @@index([dueAt])
+  @@index([isCompleted])
+  @@map("activities")
+}
+
+model ActivityContact {
+  activityId String @map("activity_id")
+  contactId  String @map("contact_id")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, contactId])
+  @@map("activity_contacts")
+}
+
+enum NoteEntityType {
+  ORGANIZATION
+  CONTACT
+  DEAL
+}
+
+model Note {
+  id              String         @id @default(cuid())
+  tenantId        String         @map("tenant_id")
+  content         String
+  entityType      NoteEntityType @map("entity_type")
+  entityId        String         @map("entity_id")
+  createdByUserId String         @map("created_by_user_id")
+  updatedByUserId String?        @map("updated_by_user_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("NoteCreatedBy", fields: [createdByUserId], references: [id])
+  updatedBy User?  @relation("NoteUpdatedBy", fields: [updatedByUserId], references: [id])
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@map("notes")
+}
+
+// ============================================
+// Configuration
+// ============================================
+
+model ActivityType {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("activity_types")
+}
+
+model ContactRole {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("contact_roles")
+}
+
+// ============================================
+// Data Quality
+// ============================================
+
+enum DuplicateEntityType {
+  ORGANIZATION
+  CONTACT
+}
+
+enum DuplicateStatus {
+  PENDING
+  MERGED
+  DISMISSED
+}
+
+model DuplicateSuggestion {
+  id               String              @id @default(cuid())
+  tenantId         String              @map("tenant_id")
+  entityType       DuplicateEntityType @map("entity_type")
+  entityId1        String              @map("entity_id_1")
+  entityId2        String              @map("entity_id_2")
+  similarityScore  Float               @map("similarity_score")
+  status           DuplicateStatus     @default(PENDING)
+  reviewedByUserId String?             @map("reviewed_by_user_id")
+  reviewedAt       DateTime?           @map("reviewed_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation(fields: [reviewedByUserId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([entityType])
+  @@map("duplicate_suggestions")
+}
+
+// ============================================
+// Audit & History
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  userId     String?  @map("user_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  beforeData Json?    @map("before_data")
+  afterData  Json?    @map("after_data")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// User Preferences
+// ============================================
+
+model SavedFilter {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  entityType   String   @map("entity_type")
+  name         String
+  filterConfig Json     @map("filter_config")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_filters")
+}
+
+// ============================================
+// Import Jobs
+// ============================================
+
+enum ImportJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ImportJob {
+  id              String          @id @default(cuid())
+  tenantId        String          @map("tenant_id")
+  userId          String          @map("user_id")
+  status          ImportJobStatus @default(PENDING)
+  clearExisting   Boolean         @default(false) @map("clear_existing")
+  currentFile     String?         @map("current_file")
+  filesProcessed  Int             @default(0) @map("files_processed")
+  totalFiles      Int             @default(0) @map("total_files")
+  recordsImported Int             @default(0) @map("records_imported")
+  errorMessage    String?         @map("error_message")
+  startedAt       DateTime?       @map("started_at")
+  completedAt     DateTime?       @map("completed_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("import_jobs")
+}
