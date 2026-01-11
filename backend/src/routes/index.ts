@@ -40,6 +40,7 @@ router.post('/contacts', authenticate, (req, res, next) => ContactController.cre
 router.get('/contacts/:id', authenticate, (req, res, next) => ContactController.findById(req, res).catch(next));
 router.patch('/contacts/:id', authenticate, (req, res, next) => ContactController.update(req, res).catch(next));
 router.delete('/contacts/:id', authenticate, (req, res, next) => ContactController.delete(req, res).catch(next));
+router.get('/contacts/:id/activities', authenticate, (req, res, next) => ContactController.getActivities(req, res).catch(next));
 router.get('/contacts/:id/notes', authenticate, (req, res, next) => ContactController.getNotes(req, res).catch(next));
 router.post('/contacts/:id/notes', authenticate, (req, res, next) => ContactController.createNote(req, res).catch(next));
 

@@ -193,9 +193,29 @@ export default function Deals() {
   const handleExport = async () => {
     try {
       const response = await dealAPI.getAll({ limit: 10000 });
-      const allDeals = response.data.data;
-      const flattened = flattenForExport(allDeals);
-      exportToCSV(flattened, 'deals');
+      let deals = response.data.data;
+
+      // Filter by selected stages if any
+      if (selectedStages.length > 0) {
+        deals = deals.filter((deal: any) => selectedStages.includes(deal.stage));
+      }
+
+      if (!deals || deals.length === 0) {
+        alert('No deals to export');
+        return;
+      }
+
+      // Format deals with specific fields only
+      const formattedDeals = deals.map((deal: any) => ({
+        Title: deal.title || '',
+        Organization: deal.organization?.name || '',
+        Stage: deal.stage || '',
+        Amount: deal.amount || 0,
+        Probability: deal.probability !== null ? `${deal.probability}%` : '',
+        'Expected Close Date': deal.expectedCloseDate ? new Date(deal.expectedCloseDate).toLocaleDateString('sv-SE') : '',
+      }));
+
+      exportToCSV(formattedDeals, 'deals');
     } catch (error) {
       alert('Error exporting deals');
     }
