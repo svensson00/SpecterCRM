@@ -241,6 +241,66 @@ export class ContactService {
     });
   }
 
+  static async getActivities(
+    id: string,
+    tenantId: string,
+    page = 1,
+    limit = 20,
+    isCompleted?: boolean,
+    startDate?: string,
+    endDate?: string
+  ) {
+    await this.findById(id, tenantId);
+
+    const where: any = {
+      tenantId,
+      contacts: {
+        some: { contactId: id },
+      },
+    };
+
+    // Add completion status filter
+    if (isCompleted !== undefined) {
+      where.isCompleted = isCompleted;
+    }
+
+    // Add date range filter
+    if (startDate || endDate) {
+      where.dueAt = {};
+      if (startDate) {
+        where.dueAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.dueAt.lte = new Date(endDate);
+      }
+    }
+
+    const [activities, total] = await Promise.all([
+      prisma.activity.findMany({
+        where,
+        include: {
+          owner: { select: { id: true, email: true, firstName: true, lastName: true } },
+          relatedOrganization: { select: { id: true, name: true } },
+          relatedDeal: { select: { id: true, title: true } },
+          contacts: {
+            include: {
+              contact: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.activity.count({ where }),
+    ]);
+
+    return {
+      data: activities,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   static async checkDuplicates(
     firstName: string,
     lastName: string,
