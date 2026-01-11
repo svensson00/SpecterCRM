@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contactAPI, organizationAPI, userAPI, activityAPI } from '../lib/api';
-import DateFilter from '../components/DateFilter';
+import { exportToCSV } from '../utils/csv';
 
 export default function ContactDetail() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +30,8 @@ export default function ContactDetail() {
   const [activitiesFilter, setActivitiesFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [activitiesStartDate, setActivitiesStartDate] = useState<string | null>(null);
   const [activitiesEndDate, setActivitiesEndDate] = useState<string | null>(null);
+  const [activitiesDateOption, setActivitiesDateOption] = useState<string>('none');
+  const [showActivitiesDateInputs, setShowActivitiesDateInputs] = useState(false);
 
   const { data: contact, isLoading } = useQuery({
     queryKey: ['contact', id],
@@ -275,9 +277,88 @@ export default function ContactDetail() {
     }
   };
 
-  const handleActivitiesDateFilterChange = (start: string | null, end: string | null) => {
-    setActivitiesStartDate(start);
-    setActivitiesEndDate(end);
+  const handleActivitiesDateOption = (option: string) => {
+    setActivitiesDateOption(option);
+
+    if (option === 'none') {
+      setActivitiesStartDate(null);
+      setActivitiesEndDate(null);
+      setShowActivitiesDateInputs(false);
+    } else if (option === 'custom') {
+      setShowActivitiesDateInputs(true);
+    } else {
+      setShowActivitiesDateInputs(false);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let start: Date | null = null;
+      let end: Date | null = null;
+
+      switch (option) {
+        case 'today':
+          start = new Date(today);
+          end = new Date(today);
+          end.setHours(23, 59, 59, 999);
+          break;
+        case 'this-week':
+          start = new Date(today);
+          const dayOfWeek = start.getDay();
+          const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+          start.setDate(start.getDate() + diff);
+          end = new Date(start);
+          end.setDate(end.getDate() + 6);
+          end.setHours(23, 59, 59, 999);
+          break;
+        case 'this-month':
+          start = new Date(today.getFullYear(), today.getMonth(), 1);
+          end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          end.setHours(23, 59, 59, 999);
+          break;
+        case 'last-30-days':
+          start = new Date(today);
+          start.setDate(start.getDate() - 30);
+          end = new Date(today);
+          end.setHours(23, 59, 59, 999);
+          break;
+      }
+
+      setActivitiesStartDate(start ? start.toISOString() : null);
+      setActivitiesEndDate(end ? end.toISOString() : null);
+    }
+  };
+
+  const handleExportActivities = async () => {
+    try {
+      const params: any = { limit: 10000 };
+      if (activitiesFilter !== 'all') {
+        params.isCompleted = activitiesFilter === 'completed';
+      }
+      if (activitiesStartDate) params.startDate = activitiesStartDate;
+      if (activitiesEndDate) params.endDate = activitiesEndDate;
+
+      const response = await contactAPI.getActivities(id!, params);
+      const activities = response.data.data;
+
+      if (!activities || activities.length === 0) {
+        alert('No activities to export');
+        return;
+      }
+
+      // Format activities for export with specific fields
+      const formattedActivities = activities.map((activity: any) => ({
+        Type: activity.type || '',
+        Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
+        Description: activity.subject || '',
+        Organization: activity.relatedOrganization?.name || '',
+        Deal: activity.relatedDeal?.title || '',
+        Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
+      }));
+
+      exportToCSV(formattedActivities, `contact-activities-${contact?.firstName}-${contact?.lastName}`);
+    } catch (error) {
+      alert('Error exporting activities');
+      console.error(error);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -767,16 +848,24 @@ export default function ContactDetail() {
         <div className="px-4 py-5 sm:px-6 border-b border-dark-700">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-white">Activities</h2>
-            <Link
-              to={`/activities/new?contactId=${id}`}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
-            >
-              + New Activity
-            </Link>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportActivities}
+                className="inline-flex items-center px-3 py-1.5 border border-dark-700 rounded-md shadow-sm text-sm font-medium text-gray-300 card hover:bg-dark-900"
+              >
+                Export CSV
+              </button>
+              <Link
+                to={`/activities/new?contactId=${id}`}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+              >
+                + New Activity
+              </Link>
+            </div>
           </div>
 
           {/* Filters */}
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex flex-wrap gap-4 items-center">
             <div className="flex gap-2">
               <button
                 onClick={() => setActivitiesFilter('all')}
@@ -810,10 +899,35 @@ export default function ContactDetail() {
               </button>
             </div>
 
-            <DateFilter
-              onChange={handleActivitiesDateFilterChange}
-              storageKey="contactActivitiesDateFilter"
-            />
+            <select
+              value={activitiesDateOption}
+              onChange={(e) => handleActivitiesDateOption(e.target.value)}
+              className="px-3 py-1.5 text-sm bg-dark-800 border border-dark-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="none">All Dates</option>
+              <option value="today">Today</option>
+              <option value="this-week">This Week</option>
+              <option value="this-month">This Month</option>
+              <option value="last-30-days">Last 30 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+
+            {showActivitiesDateInputs && (
+              <>
+                <input
+                  type="date"
+                  value={activitiesStartDate ? activitiesStartDate.split('T')[0] : ''}
+                  onChange={(e) => setActivitiesStartDate(e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  className="px-3 py-1.5 text-sm bg-dark-800 border border-dark-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <input
+                  type="date"
+                  value={activitiesEndDate ? activitiesEndDate.split('T')[0] : ''}
+                  onChange={(e) => setActivitiesEndDate(e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : null)}
+                  className="px-3 py-1.5 text-sm bg-dark-800 border border-dark-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </>
+            )}
           </div>
         </div>
 

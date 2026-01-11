@@ -256,6 +256,11 @@ export class ContactService {
           owner: { select: { id: true, email: true, firstName: true, lastName: true } },
           relatedOrganization: { select: { id: true, name: true } },
           relatedDeal: { select: { id: true, title: true } },
+          contacts: {
+            include: {
+              contact: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
         },
         skip: (page - 1) * limit,
         take: limit,
