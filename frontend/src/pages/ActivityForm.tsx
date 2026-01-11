@@ -13,11 +13,23 @@ export default function ActivityForm() {
   const queryClient = useQueryClient();
   const isEdit = Boolean(id);
 
+  // Generate default date/time (current date and time) for new activities
+  const getDefaultDueAt = () => {
+    if (isEdit) return '';
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const [formData, setFormData] = useState({
     type: 'Call',
     subject: '',
     description: '',
-    dueAt: '',
+    dueAt: getDefaultDueAt(),
     relatedOrganizationId: '',
     relatedDealId: '',
     ownerUserId: '',
