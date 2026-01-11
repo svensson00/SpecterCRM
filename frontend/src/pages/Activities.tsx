@@ -151,8 +151,8 @@ export default function Activities() {
         Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
         Description: activity.subject || '',
         Organization: activity.relatedOrganization?.name || '',
-        Deal: activity.relatedDeal?.title || '',
         Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
+        Deal: activity.relatedDeal?.title || '',
       }));
 
       exportToCSV(formattedActivities, 'activities');
