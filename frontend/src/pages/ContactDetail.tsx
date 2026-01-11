@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { contactAPI, organizationAPI, userAPI } from '../lib/api';
+import { contactAPI, organizationAPI, userAPI, activityAPI } from '../lib/api';
+import DateFilter from '../components/DateFilter';
 
 export default function ContactDetail() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,11 @@ export default function ContactDetail() {
   const [organizationSearch, setOrganizationSearch] = useState<string>('');
   const [ownerSearch, setOwnerSearch] = useState<string>('');
 
+  // Activities filtering state
+  const [activitiesFilter, setActivitiesFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [activitiesStartDate, setActivitiesStartDate] = useState<string | null>(null);
+  const [activitiesEndDate, setActivitiesEndDate] = useState<string | null>(null);
+
   const { data: contact, isLoading } = useQuery({
     queryKey: ['contact', id],
     queryFn: () => contactAPI.getById(id!).then(r => r.data),
@@ -39,6 +45,20 @@ export default function ContactDetail() {
   const { data: users } = useQuery({
     queryKey: ['users'],
     queryFn: () => userAPI.getAll().then((r) => r.data),
+  });
+
+  const { data: activitiesData } = useQuery({
+    queryKey: ['contact-activities', id, activitiesFilter, activitiesStartDate, activitiesEndDate],
+    queryFn: () => {
+      const params: any = { limit: 1000 };
+      if (activitiesFilter !== 'all') {
+        params.isCompleted = activitiesFilter === 'completed';
+      }
+      if (activitiesStartDate) params.startDate = activitiesStartDate;
+      if (activitiesEndDate) params.endDate = activitiesEndDate;
+      return contactAPI.getActivities(id!, params).then(r => r.data);
+    },
+    enabled: !!id,
   });
 
   useEffect(() => {
@@ -124,6 +144,14 @@ export default function ContactDetail() {
     },
     onError: (error: any) => {
       alert('Error updating owner: ' + (error.response?.data?.message || error.message));
+    },
+  });
+
+  const toggleActivityCompleteMutation = useMutation({
+    mutationFn: (activityId: string) => activityAPI.toggleComplete(activityId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contact-activities', id] });
+      queryClient.invalidateQueries({ queryKey: ['activities'] });
     },
   });
 
@@ -245,6 +273,11 @@ export default function ContactDetail() {
     if (confirm(`Are you sure you want to delete "${contact?.firstName} ${contact?.lastName}"?`)) {
       deleteMutation.mutate();
     }
+  };
+
+  const handleActivitiesDateFilterChange = (start: string | null, end: string | null) => {
+    setActivitiesStartDate(start);
+    setActivitiesEndDate(end);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -726,6 +759,152 @@ export default function ContactDetail() {
               </div>
             )}
           </dl>
+        </div>
+      </div>
+
+      {/* Activities Panel */}
+      <div className="card shadow overflow-hidden sm:rounded-lg mt-6">
+        <div className="px-4 py-5 sm:px-6 border-b border-dark-700">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white">Activities</h2>
+            <Link
+              to={`/activities/new?contactId=${id}`}
+              className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+            >
+              + New Activity
+            </Link>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActivitiesFilter('all')}
+                className={`px-3 py-1.5 text-sm rounded-md ${
+                  activitiesFilter === 'all'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setActivitiesFilter('pending')}
+                className={`px-3 py-1.5 text-sm rounded-md ${
+                  activitiesFilter === 'pending'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => setActivitiesFilter('completed')}
+                className={`px-3 py-1.5 text-sm rounded-md ${
+                  activitiesFilter === 'completed'
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-dark-800 text-gray-300 hover:bg-dark-700'
+                }`}
+              >
+                Completed
+              </button>
+            </div>
+
+            <DateFilter
+              onChange={handleActivitiesDateFilterChange}
+              storageKey="contactActivitiesDateFilter"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-dark-700">
+            <thead className="bg-dark-800">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Subject
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Due Date
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Organization
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Deal
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Owner
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-dark-700">
+              {activitiesData?.data?.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-400">
+                    No activities found
+                  </td>
+                </tr>
+              ) : (
+                activitiesData?.data?.map((activity: any) => (
+                  <tr key={activity.id} className="hover:bg-dark-800">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={activity.isCompleted}
+                        onChange={() => toggleActivityCompleteMutation.mutate(activity.id)}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-600 rounded bg-dark-800"
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Link to={`/activities/${activity.id}`} className="text-sm text-white hover:text-gray-200">
+                        {activity.subject}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {activity.type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '—'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {activity.relatedOrganization ? (
+                        <Link
+                          to={`/organizations/${activity.relatedOrganization.id}`}
+                          className="text-white hover:text-gray-200"
+                        >
+                          {activity.relatedOrganization.name}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {activity.relatedDeal ? (
+                        <Link
+                          to={`/deals/${activity.relatedDeal.id}`}
+                          className="text-white hover:text-gray-200"
+                        >
+                          {activity.relatedDeal.title}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {activity.owner ? `${activity.owner.firstName} ${activity.owner.lastName}` : '—'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

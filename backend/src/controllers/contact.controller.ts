@@ -48,6 +48,17 @@ export class ContactController {
     res.status(204).send();
   }
 
+  static async getActivities(req: AuthRequest, res: Response) {
+    const pagination = paginationSchema.parse(req.query);
+    const result = await ContactService.getActivities(
+      req.params.id,
+      req.user!.tenantId,
+      pagination.page,
+      pagination.limit
+    );
+    res.json(result);
+  }
+
   static async getNotes(req: AuthRequest, res: Response) {
     const notes = await NoteService.findByEntity('CONTACT', req.params.id, req.user!.tenantId);
     res.json(notes);

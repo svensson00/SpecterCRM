@@ -241,6 +241,42 @@ export class ContactService {
     });
   }
 
+  static async getActivities(id: string, tenantId: string, page = 1, limit = 20) {
+    await this.findById(id, tenantId);
+
+    const [activities, total] = await Promise.all([
+      prisma.activity.findMany({
+        where: {
+          tenantId,
+          contacts: {
+            some: { contactId: id },
+          },
+        },
+        include: {
+          owner: { select: { id: true, email: true, firstName: true, lastName: true } },
+          relatedOrganization: { select: { id: true, name: true } },
+          relatedDeal: { select: { id: true, title: true } },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.activity.count({
+        where: {
+          tenantId,
+          contacts: {
+            some: { contactId: id },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: activities,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   static async checkDuplicates(
     firstName: string,
     lastName: string,

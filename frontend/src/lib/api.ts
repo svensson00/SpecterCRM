@@ -123,6 +123,7 @@ export const contactAPI = {
   create: (data: any) => api.post('/contacts', data),
   update: (id: string, data: any) => api.patch(`/contacts/${id}`, data),
   delete: (id: string) => api.delete(`/contacts/${id}`),
+  getActivities: (id: string, params?: any) => api.get(`/contacts/${id}/activities`, { params }),
   getNotes: (id: string) => api.get(`/contacts/${id}/notes`),
   createNote: (id: string, content: string) => api.post(`/contacts/${id}/notes`, { content }),
   checkDuplicates: (firstName: string, lastName: string, emails: string[], primaryOrganizationId: string) =>
