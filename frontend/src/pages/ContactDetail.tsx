@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contactAPI, organizationAPI, userAPI, activityAPI } from '../lib/api';
-import { exportToCSV } from '../utils/csv';
 
 export default function ContactDetail() {
   const { id } = useParams<{ id: string }>();
@@ -324,40 +323,6 @@ export default function ContactDetail() {
 
       setActivitiesStartDate(start ? start.toISOString() : null);
       setActivitiesEndDate(end ? end.toISOString() : null);
-    }
-  };
-
-  const handleExportActivities = async () => {
-    try {
-      const params: any = { limit: 10000 };
-      if (activitiesFilter !== 'all') {
-        params.isCompleted = activitiesFilter === 'completed';
-      }
-      if (activitiesStartDate) params.startDate = activitiesStartDate;
-      if (activitiesEndDate) params.endDate = activitiesEndDate;
-
-      const response = await contactAPI.getActivities(id!, params);
-      const activities = response.data.data;
-
-      if (!activities || activities.length === 0) {
-        alert('No activities to export');
-        return;
-      }
-
-      // Format activities for export with specific fields
-      const formattedActivities = activities.map((activity: any) => ({
-        Type: activity.type || '',
-        Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
-        Description: activity.subject || '',
-        Organization: activity.relatedOrganization?.name || '',
-        Deal: activity.relatedDeal?.title || '',
-        Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
-      }));
-
-      exportToCSV(formattedActivities, `contact-activities-${contact?.firstName}-${contact?.lastName}`);
-    } catch (error) {
-      alert('Error exporting activities');
-      console.error(error);
     }
   };
 
@@ -848,20 +813,12 @@ export default function ContactDetail() {
         <div className="px-4 py-5 sm:px-6 border-b border-dark-700">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-white">Activities</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={handleExportActivities}
-                className="inline-flex items-center px-3 py-1.5 border border-dark-700 rounded-md shadow-sm text-sm font-medium text-gray-300 card hover:bg-dark-900"
-              >
-                Export CSV
-              </button>
-              <Link
-                to={`/activities/new?contactId=${id}`}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
-              >
-                + New Activity
-              </Link>
-            </div>
+            <Link
+              to={`/activities/new?contactId=${id}`}
+              className="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+            >
+              + New Activity
+            </Link>
           </div>
 
           {/* Filters */}

@@ -129,10 +129,33 @@ export default function Activities() {
 
   const handleExport = async () => {
     try {
-      const response = await activityAPI.getAll({ limit: 10000 });
-      const allActivities = response.data.data;
-      const flattened = flattenForExport(allActivities);
-      exportToCSV(flattened, 'activities');
+      // Build params with current filters
+      const params: any = { limit: 10000 };
+      if (filter !== 'all') {
+        params.isCompleted = filter === 'completed';
+      }
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+
+      const response = await activityAPI.getAll(params);
+      const activities = response.data.data;
+
+      if (!activities || activities.length === 0) {
+        alert('No activities to export');
+        return;
+      }
+
+      // Format activities with specific fields only
+      const formattedActivities = activities.map((activity: any) => ({
+        Type: activity.type || '',
+        Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
+        Description: activity.subject || '',
+        Organization: activity.relatedOrganization?.name || '',
+        Deal: activity.relatedDeal?.title || '',
+        Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
+      }));
+
+      exportToCSV(formattedActivities, 'activities');
     } catch (error) {
       alert('Error exporting activities');
     }
