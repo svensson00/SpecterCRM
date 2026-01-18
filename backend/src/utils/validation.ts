@@ -80,6 +80,7 @@ export const activitySchema = z.object({
   description: z.string().optional(),
   dueAt: z.string().datetime().optional().or(z.literal('')),
   relatedOrganizationId: z.string().optional(),
+  organizationIds: z.array(z.string()).optional(),
   relatedDealId: z.string().optional(),
   contactIds: z.array(z.string()).optional(),
   ownerUserId: z.string().optional(),

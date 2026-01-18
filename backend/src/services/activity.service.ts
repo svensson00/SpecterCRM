@@ -10,6 +10,7 @@ export class ActivityService {
       description?: string;
       dueAt?: string;
       relatedOrganizationId?: string;
+      organizationIds?: string[];
       relatedDealId?: string;
       contactIds?: string[];
       ownerUserId?: string;
@@ -35,6 +36,13 @@ export class ActivityService {
               })),
             }
           : undefined,
+        organizations: data.organizationIds
+          ? {
+              create: data.organizationIds.map((organizationId) => ({
+                organization: { connect: { id: organizationId } },
+              })),
+            }
+          : undefined,
       },
       include: {
         owner: { select: { id: true, email: true, firstName: true, lastName: true } },
@@ -43,6 +51,11 @@ export class ActivityService {
         contacts: {
           include: {
             contact: { select: { id: true, firstName: true, lastName: true, emails: true } },
+          },
+        },
+        organizations: {
+          include: {
+            organization: { select: { id: true, name: true } },
           },
         },
       },
@@ -108,6 +121,11 @@ export class ActivityService {
               contact: { select: { id: true, firstName: true, lastName: true } },
             },
           },
+          organizations: {
+            include: {
+              organization: { select: { id: true, name: true } },
+            },
+          },
         },
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
@@ -134,6 +152,11 @@ export class ActivityService {
             contact: { include: { emails: true, phones: true } },
           },
         },
+        organizations: {
+          include: {
+            organization: { select: { id: true, name: true } },
+          },
+        },
         createdBy: { select: { id: true, email: true, firstName: true, lastName: true } },
         updatedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
@@ -154,6 +177,7 @@ export class ActivityService {
       description?: string;
       dueAt?: string;
       relatedOrganizationId?: string;
+      organizationIds?: string[];
       relatedDealId?: string;
       contactIds?: string[];
       ownerUserId?: string;
@@ -166,6 +190,11 @@ export class ActivityService {
     // Handle contact updates - if contactIds is provided (even as empty array), update them
     if (data.contactIds !== undefined) {
       await prisma.activityContact.deleteMany({ where: { activityId: id } });
+    }
+
+    // Handle organization updates - if organizationIds is provided (even as empty array), update them
+    if (data.organizationIds !== undefined) {
+      await prisma.activityOrganization.deleteMany({ where: { activityId: id } });
     }
 
     const activity = await prisma.activity.update({
@@ -186,6 +215,13 @@ export class ActivityService {
               })),
             }
           : undefined,
+        organizations: data.organizationIds !== undefined && data.organizationIds.length > 0
+          ? {
+              create: data.organizationIds.map((organizationId) => ({
+                organization: { connect: { id: organizationId } },
+              })),
+            }
+          : undefined,
       },
       include: {
         owner: { select: { id: true, email: true, firstName: true, lastName: true } },
@@ -194,6 +230,11 @@ export class ActivityService {
         contacts: {
           include: {
             contact: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+        organizations: {
+          include: {
+            organization: { select: { id: true, name: true } },
           },
         },
       },
