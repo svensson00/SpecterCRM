@@ -479,7 +479,19 @@ export default function ActivityDetail() {
                 ) : (
                   <div>
                     <div className="mb-3">
-                      {activity.relatedOrganization ? (
+                      {activity.organizations && activity.organizations.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {activity.organizations.map((ao: any) => (
+                            <Link
+                              key={ao.organizationId}
+                              to={`/organizations/${ao.organizationId}`}
+                              className="text-white hover:text-gray-200"
+                            >
+                              {ao.organization?.name}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : activity.relatedOrganization ? (
                         <Link to={`/organizations/${activity.relatedOrganization.id}`} className="text-white hover:text-gray-200">
                           {activity.relatedOrganization.name}
                         </Link>
