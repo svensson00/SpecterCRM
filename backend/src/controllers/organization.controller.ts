@@ -78,11 +78,20 @@ export class OrganizationController {
 
   static async getActivities(req: AuthRequest, res: Response) {
     const pagination = paginationSchema.parse(req.query);
+
+    // Parse filter parameters
+    const isCompleted = req.query.isCompleted === 'true' ? true : req.query.isCompleted === 'false' ? false : undefined;
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
+
     const result = await OrganizationService.getActivities(
       req.params.id,
       req.user!.tenantId,
       pagination.page,
-      pagination.limit
+      pagination.limit,
+      isCompleted,
+      startDate,
+      endDate
     );
     res.json(result);
   }
