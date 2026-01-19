@@ -240,6 +240,7 @@ export const dealAPI = {
   getPipeline: () => api.get('/deals/pipeline/summary'),
   getNotes: (id: string) => api.get(`/deals/${id}/notes`),
   createNote: (id: string, content: string) => api.post(`/deals/${id}/notes`, { content }),
+  getActivities: (id: string, params?: any) => api.get(`/deals/${id}/activities`, { params }),
 };
 
 export const activityAPI = {
