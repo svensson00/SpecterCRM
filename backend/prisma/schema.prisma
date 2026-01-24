@@ -123,9 +123,10 @@ model Organization {
   createdBy  User    @relation("OrganizationCreatedBy", fields: [createdByUserId], references: [id])
   updatedBy  User?   @relation("OrganizationUpdatedBy", fields: [updatedByUserId], references: [id])
 
-  contacts   Contact[]
-  deals      Deal[]
-  activities Activity[]
+  contacts            Contact[]
+  deals               Deal[]
+  activities          Activity[]
+  activityOrganizations ActivityOrganization[] @relation("ActivityOrganizations")
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -271,7 +272,8 @@ model Activity {
   createdBy           User          @relation("ActivityCreatedBy", fields: [createdByUserId], references: [id])
   updatedBy           User?         @relation("ActivityUpdatedBy", fields: [updatedByUserId], references: [id])
 
-  contacts ActivityContact[]
+  contacts      ActivityContact[]
+  organizations ActivityOrganization[]
 
   @@index([tenantId])
   @@index([ownerUserId])
@@ -290,6 +292,17 @@ model ActivityContact {
 
   @@id([activityId, contactId])
   @@map("activity_contacts")
+}
+
+model ActivityOrganization {
+  activityId     String @map("activity_id")
+  organizationId String @map("organization_id")
+
+  activity     Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  organization Organization @relation("ActivityOrganizations", fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, organizationId])
+  @@map("activity_organizations")
 }
 
 enum NoteEntityType {

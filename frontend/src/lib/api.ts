@@ -7,20 +7,13 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
 // Track if we're currently refreshing to prevent multiple simultaneous refresh requests
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: any) => void;
   reject: (reason?: any) => void;
 }> = [];
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const processQueue = (error: any, token: string | null = null) => {
   failedQueue.forEach((prom) => {
@@ -30,10 +23,114 @@ const processQueue = (error: any, token: string | null = null) => {
       prom.resolve(token);
     }
   });
-
   failedQueue = [];
 };
 
+// Decode JWT to get expiration time (without verifying signature)
+const getTokenExpiry = (token: string): number | null => {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = JSON.parse(atob(payload));
+    return decoded.exp ? decoded.exp * 1000 : null; // Convert to milliseconds
+  } catch {
+    return null;
+  }
+};
+
+// Check if token is about to expire (within 5 minutes)
+const isTokenExpiringSoon = (token: string): boolean => {
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return true;
+  const fiveMinutes = 5 * 60 * 1000;
+  return Date.now() > expiry - fiveMinutes;
+};
+
+// Proactive token refresh function
+const refreshTokenProactively = async (): Promise<string | null> => {
+  if (isRefreshing) return null;
+
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return null;
+
+  isRefreshing = true;
+
+  try {
+    const baseURL = import.meta.env.VITE_API_URL || '/api';
+    const { data } = await axios.post(`${baseURL}/auth/refresh`, { refreshToken });
+
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
+
+    // Schedule next proactive refresh
+    scheduleTokenRefresh(data.accessToken);
+
+    processQueue(null, data.accessToken);
+    return data.accessToken;
+  } catch (error) {
+    processQueue(error, null);
+    return null;
+  } finally {
+    isRefreshing = false;
+  }
+};
+
+// Schedule proactive token refresh before expiry
+const scheduleTokenRefresh = (token: string) => {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return;
+
+  // Refresh 5 minutes before expiry
+  const fiveMinutes = 5 * 60 * 1000;
+  const refreshIn = expiry - Date.now() - fiveMinutes;
+
+  if (refreshIn > 0) {
+    refreshTimer = setTimeout(() => {
+      refreshTokenProactively();
+    }, refreshIn);
+  }
+};
+
+// Initialize proactive refresh on page load
+const initializeTokenRefresh = () => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    if (isTokenExpiringSoon(token)) {
+      // Token is expiring soon, refresh immediately
+      refreshTokenProactively();
+    } else {
+      // Schedule refresh for later
+      scheduleTokenRefresh(token);
+    }
+  }
+};
+
+// Run initialization
+initializeTokenRefresh();
+
+// Request interceptor - check token before each request
+api.interceptors.request.use(async (config) => {
+  let token = localStorage.getItem('accessToken');
+
+  if (token && isTokenExpiringSoon(token)) {
+    // Token is expiring soon, refresh before making request
+    const newToken = await refreshTokenProactively();
+    if (newToken) {
+      token = newToken;
+    }
+  }
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor - handle 401 errors as fallback
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -63,16 +160,16 @@ api.interceptors.response.use(
           throw new Error('No refresh token');
         }
 
-        // Use the configured baseURL for the refresh request
         const baseURL = import.meta.env.VITE_API_URL || '/api';
         const { data } = await axios.post(`${baseURL}/auth/refresh`, { refreshToken });
 
         localStorage.setItem('accessToken', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
 
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        // Schedule next proactive refresh
+        scheduleTokenRefresh(data.accessToken);
 
-        // Process queued requests with the new token
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         processQueue(null, data.accessToken);
 
         return api(originalRequest);
@@ -143,6 +240,7 @@ export const dealAPI = {
   getPipeline: () => api.get('/deals/pipeline/summary'),
   getNotes: (id: string) => api.get(`/deals/${id}/notes`),
   createNote: (id: string, content: string) => api.post(`/deals/${id}/notes`, { content }),
+  getActivities: (id: string, params?: any) => api.get(`/deals/${id}/activities`, { params }),
 };
 
 export const activityAPI = {

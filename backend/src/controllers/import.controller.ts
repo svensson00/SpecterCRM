@@ -122,9 +122,16 @@ export class ImportController {
         return;
       }
 
-      // Count expected CSV files (Organizations, Contacts, Deals, Activities)
-      const expectedFiles = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv'];
-      const csvFiles = files.filter(f => expectedFiles.includes(f));
+      // Count expected CSV files (Organizations, Contacts, Deals, Activities + optional Meetings)
+      const requiredFiles = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv'];
+      const optionalFiles = ['Meetings.csv'];
+      const allExpectedFiles = [...requiredFiles, ...optionalFiles];
+      const csvFiles = files.filter(f => allExpectedFiles.includes(f));
+      const hasMeetingsFile = files.includes('Meetings.csv');
+
+      // Total steps: 4 main files + user mapping step + optional meetings step
+      // Step 1: User mappings, Steps 2-5: Organizations/Contacts/Deals/Activities, Step 6: Meetings (optional)
+      const totalSteps = hasMeetingsFile ? 5 : 4; // Files processed (not counting user mappings step)
 
       // Create import job record
       const importJob = await prisma.importJob.create({
@@ -133,16 +140,22 @@ export class ImportController {
           userId,
           status: 'PENDING',
           clearExisting: clearExisting || false,
-          totalFiles: csvFiles.length > 0 ? csvFiles.length : 4, // Default to 4 if files found
+          totalFiles: totalSteps,
         },
       });
 
       // Start import process in background
+      // Determine project root (works for both src/ and dist/ execution)
+      const projectRoot = path.resolve(__dirname, '../..');
       const isProduction = process.env.NODE_ENV === 'production';
-      const scriptPath = path.join(__dirname, '../scripts/run-import.js');
+
+      // In production, use compiled JS in dist/; in development, use TS source with tsx
+      const scriptPath = isProduction
+        ? path.join(projectRoot, 'dist/scripts/run-import.js')
+        : path.join(projectRoot, 'src/scripts/run-import.ts');
 
       // Create log file for this import
-      const logDir = path.join(__dirname, '../../logs');
+      const logDir = path.join(projectRoot, 'logs');
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
@@ -154,7 +167,7 @@ export class ImportController {
 
         const importProcess = isProduction
           ? spawn('node', [scriptPath], {
-              cwd: path.join(__dirname, '../..'),
+              cwd: projectRoot,
               env: {
                 ...process.env,
                 TENANT_ID: tenantId,
@@ -166,8 +179,8 @@ export class ImportController {
               detached: true,
               stdio: ['ignore', logFd, logFd]
             })
-          : spawn('npx', ['ts-node', scriptPath.replace('.js', '.ts')], {
-              cwd: path.join(__dirname, '../..'),
+          : spawn('npx', ['tsx', scriptPath], {
+              cwd: projectRoot,
               env: {
                 ...process.env,
                 TENANT_ID: tenantId,

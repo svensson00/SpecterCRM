@@ -100,8 +100,9 @@ export default function Activities() {
           bValue = (b.subject || '').toLowerCase();
           break;
         case 'organization':
-          aValue = (a.relatedOrganization?.name || '').toLowerCase();
-          bValue = (b.relatedOrganization?.name || '').toLowerCase();
+          // Sort by first organization name (from organizations array or legacy relatedOrganization)
+          aValue = (a.organizations?.[0]?.organization?.name || a.relatedOrganization?.name || '').toLowerCase();
+          bValue = (b.organizations?.[0]?.organization?.name || b.relatedOrganization?.name || '').toLowerCase();
           break;
         case 'date':
           aValue = a.dueAt ? new Date(a.dueAt).getTime() : 0;
@@ -146,14 +147,21 @@ export default function Activities() {
       }
 
       // Format activities with specific fields only
-      const formattedActivities = activities.map((activity: any) => ({
-        Type: activity.type || '',
-        Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
-        Description: activity.subject || '',
-        Organization: activity.relatedOrganization?.name || '',
-        Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
-        Deal: activity.relatedDeal?.title || '',
-      }));
+      const formattedActivities = activities.map((activity: any) => {
+        // Get organizations from new array or fall back to legacy field
+        const orgs = activity.organizations?.map((o: any) => o.organization?.name).filter(Boolean) || [];
+        if (orgs.length === 0 && activity.relatedOrganization?.name) {
+          orgs.push(activity.relatedOrganization.name);
+        }
+        return {
+          Type: activity.type || '',
+          Date: activity.dueAt ? new Date(activity.dueAt).toLocaleDateString('sv-SE') : '',
+          Description: activity.subject || '',
+          Organization: orgs.join('; ') || '',
+          Contacts: activity.contacts?.map((c: any) => `${c.contact?.firstName || ''} ${c.contact?.lastName || ''}`).join('; ') || '',
+          Deal: activity.relatedDeal?.title || '',
+        };
+      });
 
       exportToCSV(formattedActivities, 'activities');
     } catch (error) {
@@ -316,7 +324,19 @@ export default function Activities() {
                       </Link>
                     </td>
                     <td className="px-6 py-1.5 whitespace-nowrap">
-                      {activity.relatedOrganization ? (
+                      {activity.organizations && activity.organizations.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {activity.organizations.map((ao: any) => (
+                            <Link
+                              key={ao.organizationId}
+                              to={`/organizations/${ao.organizationId}`}
+                              className="text-white hover:text-gray-200 text-sm"
+                            >
+                              {ao.organization?.name}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : activity.relatedOrganization ? (
                         <Link to={`/organizations/${activity.relatedOrganization.id}`} className="text-white hover:text-gray-200 text-sm">
                           {activity.relatedOrganization.name}
                         </Link>

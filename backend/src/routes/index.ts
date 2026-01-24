@@ -52,6 +52,7 @@ router.patch('/deals/:id/stage', authenticate, (req, res, next) => DealControlle
 router.delete('/deals/:id', authenticate, (req, res, next) => DealController.delete(req, res).catch(next));
 router.get('/deals/:id/notes', authenticate, (req, res, next) => DealController.getNotes(req, res).catch(next));
 router.post('/deals/:id/notes', authenticate, (req, res, next) => DealController.createNote(req, res).catch(next));
+router.get('/deals/:id/activities', authenticate, (req, res, next) => DealController.getActivities(req, res).catch(next));
 router.get('/deals/pipeline/summary', authenticate, (req, res, next) => DealController.getPipeline(req, res).catch(next));
 
 router.get('/activities', authenticate, (req, res, next) => ActivityController.findAll(req, res).catch(next));

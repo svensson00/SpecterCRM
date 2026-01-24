@@ -20,6 +20,7 @@ export default function ActivityDetail() {
     isCompleted: false,
   });
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>('');
+  const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<string[]>([]);
   const [selectedDealId, setSelectedDealId] = useState<string>('');
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>('');
@@ -44,16 +45,46 @@ export default function ActivityDetail() {
     queryFn: () => organizationAPI.getAll({ limit: 1000 }).then(r => r.data),
   });
 
+  // Fetch deals for all selected organizations
   const { data: deals } = useQuery({
-    queryKey: ['deals-for-org', selectedOrganizationId],
-    queryFn: () => dealAPI.getAll({ organizationId: selectedOrganizationId, limit: 1000 }).then(r => r.data),
-    enabled: Boolean(selectedOrganizationId),
+    queryKey: ['deals-for-orgs-detail', selectedOrganizationIds],
+    queryFn: async () => {
+      if (selectedOrganizationIds.length === 0) return { data: [] };
+      const allDeals: any[] = [];
+      const seenIds = new Set();
+      for (const orgId of selectedOrganizationIds) {
+        const response = await dealAPI.getAll({ organizationId: orgId, limit: 1000 });
+        for (const deal of response.data.data || []) {
+          if (!seenIds.has(deal.id)) {
+            seenIds.add(deal.id);
+            allDeals.push(deal);
+          }
+        }
+      }
+      return { data: allDeals };
+    },
+    enabled: selectedOrganizationIds.length > 0,
   });
 
+  // Fetch contacts for all selected organizations
   const { data: contacts } = useQuery({
-    queryKey: ['contacts-for-org-activity', selectedOrganizationId],
-    queryFn: () => contactAPI.getAll({ organizationId: selectedOrganizationId, limit: 1000 }).then(r => r.data),
-    enabled: Boolean(selectedOrganizationId),
+    queryKey: ['contacts-for-orgs-detail', selectedOrganizationIds],
+    queryFn: async () => {
+      if (selectedOrganizationIds.length === 0) return { data: [] };
+      const allContacts: any[] = [];
+      const seenIds = new Set();
+      for (const orgId of selectedOrganizationIds) {
+        const response = await contactAPI.getAll({ organizationId: orgId, limit: 1000 });
+        for (const contact of response.data.data || []) {
+          if (!seenIds.has(contact.id)) {
+            seenIds.add(contact.id);
+            allContacts.push(contact);
+          }
+        }
+      }
+      return { data: allContacts };
+    },
+    enabled: selectedOrganizationIds.length > 0,
   });
 
   const { data: users } = useQuery({
@@ -83,6 +114,14 @@ export default function ActivityDetail() {
       });
 
       setSelectedOrganizationId(activity.relatedOrganizationId || '');
+      // Load organization IDs from organizations array or fall back to legacy single org
+      if (activity.organizations && activity.organizations.length > 0) {
+        setSelectedOrganizationIds(activity.organizations.map((o: any) => o.organizationId));
+      } else if (activity.relatedOrganizationId) {
+        setSelectedOrganizationIds([activity.relatedOrganizationId]);
+      } else {
+        setSelectedOrganizationIds([]);
+      }
       setSelectedDealId(activity.relatedDealId || '');
       setSelectedContactIds(activity.contacts?.map((c: any) => c.contactId) || []);
       setSelectedOwnerId(activity.ownerUserId || '');
@@ -479,7 +518,19 @@ export default function ActivityDetail() {
                 ) : (
                   <div>
                     <div className="mb-3">
-                      {activity.relatedOrganization ? (
+                      {activity.organizations && activity.organizations.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {activity.organizations.map((ao: any) => (
+                            <Link
+                              key={ao.organizationId}
+                              to={`/organizations/${ao.organizationId}`}
+                              className="text-white hover:text-gray-200"
+                            >
+                              {ao.organization?.name}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : activity.relatedOrganization ? (
                         <Link to={`/organizations/${activity.relatedOrganization.id}`} className="text-white hover:text-gray-200">
                           {activity.relatedOrganization.name}
                         </Link>
@@ -521,7 +572,7 @@ export default function ActivityDetail() {
                         >
                           No deal
                         </div>
-                        {(selectedOrganizationId ? deals?.data : [])
+                        {(selectedOrganizationIds.length > 0 ? deals?.data : [])
                           ?.filter((deal: any) =>
                             deal.title.toLowerCase().includes(dealSearch.toLowerCase())
                           )
@@ -537,7 +588,7 @@ export default function ActivityDetail() {
                             </div>
                           ))}
                       </div>
-                      {!selectedOrganizationId && (
+                      {selectedOrganizationIds.length === 0 && (
                         <p className="text-xs text-gray-400 mt-2">Select an organization first to see deals</p>
                       )}
                     </div>
@@ -594,7 +645,7 @@ export default function ActivityDetail() {
                         className="block w-full bg-dark-800 border border-dark-700 text-white rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-2"
                       />
                       <div className="max-h-48 overflow-y-auto border border-dark-700 bg-dark-800 rounded">
-                        {(selectedOrganizationId ? contacts?.data : [])
+                        {(selectedOrganizationIds.length > 0 ? contacts?.data : [])
                           ?.filter((contact: any) =>
                             `${contact.firstName} ${contact.lastName}`.toLowerCase().includes(contactSearch.toLowerCase())
                           )
@@ -612,7 +663,7 @@ export default function ActivityDetail() {
                             </label>
                           ))}
                       </div>
-                      {!selectedOrganizationId && (
+                      {selectedOrganizationIds.length === 0 && (
                         <p className="text-xs text-gray-400 mt-2">Select an organization first to see contacts</p>
                       )}
                     </div>

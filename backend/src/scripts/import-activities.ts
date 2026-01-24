@@ -33,6 +33,7 @@ interface ImportStats {
   skipped: number;
   errors: number;
   errorDetails: Array<{ row: number; reason: string; data: any }>;
+  idMapping: Map<string, string>; // oldId -> newId
 }
 
 /**
@@ -149,7 +150,7 @@ async function importActivity(
   tenantId: string,
   systemUserId: string,
   mappings: ImportMappings
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; newId?: string; oldId?: string }> {
   try {
     // Skip deleted records
     if (row.Deleted === '1') {
@@ -217,7 +218,7 @@ async function importActivity(
     });
 
     console.log(`✓ Imported activity ${rowNumber}: ${activity.subject} (${activity.id})`);
-    return { success: true };
+    return { success: true, newId: activity.id, oldId: row.ID };
 
   } catch (error: any) {
     console.error(`✗ Failed to import activity ${rowNumber}:`, error.message);
@@ -239,68 +240,93 @@ async function importActivitiesFromCSV(
     success: 0,
     skipped: 0,
     errors: 0,
-    errorDetails: []
+    errorDetails: [],
+    idMapping: new Map()
   };
 
-  return new Promise((resolve, reject) => {
-    let rowNumber = 0;
+  // First, collect all rows from the CSV
+  const rows: ActivityCSVRow[] = await new Promise((resolve, reject) => {
+    const collectedRows: ActivityCSVRow[] = [];
 
-    // Use latin1 encoding to handle Swedish/European characters (ö, ä, å, etc.)
     fs.createReadStream(csvFilePath, { encoding: 'latin1' })
       .pipe(csv({
         skipLines: 0,
         // Strip BOM if present
         mapHeaders: ({ header }: { header: string }) => header.replace(/^\uFEFF/, '')
       }))
-      .on('data', async (row: ActivityCSVRow) => {
-        rowNumber++;
-        stats.total++;
-
-        const result = await importActivity(
-          row,
-          rowNumber,
-          tenantId,
-          systemUserId,
-          mappings
-        );
-
-        if (result.success) {
-          stats.success++;
-        } else if (result.error === 'Record marked as deleted') {
-          stats.skipped++;
-        } else {
-          stats.errors++;
-          stats.errorDetails.push({
-            row: rowNumber,
-            reason: result.error || 'Unknown error',
-            data: row
-          });
-        }
+      .on('data', (row: ActivityCSVRow) => {
+        collectedRows.push(row);
       })
       .on('end', () => {
-        console.log('\n=== Import Summary ===');
-        console.log(`Total rows: ${stats.total}`);
-        console.log(`Successfully imported: ${stats.success}`);
-        console.log(`Skipped (deleted): ${stats.skipped}`);
-        console.log(`Errors: ${stats.errors}`);
-
-        if (stats.errorDetails.length > 0) {
-          console.log('\n=== Error Details ===');
-          stats.errorDetails.slice(0, 10).forEach(err => {
-            console.log(`Row ${err.row}: ${err.reason}`);
-            console.log(`  Subject: ${err.data.Subject}`);
-          });
-          if (stats.errorDetails.length > 10) {
-            console.log(`... and ${stats.errorDetails.length - 10} more errors`);
-          }
-        }
-
-        resolve(stats);
+        resolve(collectedRows);
       })
       .on('error', (error) => {
         reject(error);
       });
   });
+
+  // Now process rows sequentially
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNumber = i + 1;
+    stats.total++;
+
+    const result = await importActivity(
+      row,
+      rowNumber,
+      tenantId,
+      systemUserId,
+      mappings
+    );
+
+    if (result.success) {
+      stats.success++;
+      if (result.oldId && result.newId) {
+        stats.idMapping.set(result.oldId, result.newId);
+      }
+    } else if (result.error === 'Record marked as deleted') {
+      stats.skipped++;
+    } else {
+      stats.errors++;
+      stats.errorDetails.push({
+        row: rowNumber,
+        reason: result.error || 'Unknown error',
+        data: row
+      });
+    }
+  }
+
+  console.log('\n=== Import Summary ===');
+  console.log(`Total rows: ${stats.total}`);
+  console.log(`Successfully imported: ${stats.success}`);
+  console.log(`Skipped (deleted): ${stats.skipped}`);
+  console.log(`Errors: ${stats.errors}`);
+
+  if (stats.errorDetails.length > 0) {
+    console.log('\n=== Error Details ===');
+    stats.errorDetails.slice(0, 10).forEach(err => {
+      console.log(`Row ${err.row}: ${err.reason}`);
+      console.log(`  Subject: ${err.data.Subject}`);
+    });
+    if (stats.errorDetails.length > 10) {
+      console.log(`... and ${stats.errorDetails.length - 10} more errors`);
+    }
+  }
+
+  console.log(`ID mappings created: ${stats.idMapping.size}`);
+  return stats;
+}
+
+/**
+ * Save ID mapping to file
+ */
+export async function saveActivityMapping(
+  mapping: Map<string, string>,
+  outputPath: string
+): Promise<void> {
+  const mappingObj = Object.fromEntries(mapping);
+  fs.writeFileSync(outputPath, JSON.stringify(mappingObj, null, 2));
+  console.log(`✓ Saved activity ID mapping to ${outputPath}`);
 }
 
 /**

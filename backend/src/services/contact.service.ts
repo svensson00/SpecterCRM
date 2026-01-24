@@ -287,6 +287,11 @@ export class ContactService {
               contact: { select: { id: true, firstName: true, lastName: true } },
             },
           },
+          organizations: {
+            include: {
+              organization: { select: { id: true, name: true } },
+            },
+          },
         },
         skip: (page - 1) * limit,
         take: limit,

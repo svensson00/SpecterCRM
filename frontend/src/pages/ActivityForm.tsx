@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { activityAPI, organizationAPI, contactAPI, dealAPI, userAPI, adminAPI } from '../lib/api';
 import UserSelect from '../components/UserSelect';
-import OrganizationSelect from '../components/OrganizationSelect';
+import OrganizationMultiSelect from '../components/OrganizationMultiSelect';
 import ContactMultiSelect from '../components/ContactMultiSelect';
 import DealSelect from '../components/DealSelect';
 
@@ -30,12 +30,12 @@ export default function ActivityForm() {
     subject: '',
     description: '',
     dueAt: getDefaultDueAt(),
-    relatedOrganizationId: '',
     relatedDealId: '',
     ownerUserId: '',
   });
 
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [selectedOrganizations, setSelectedOrganizations] = useState<string[]>([]);
 
   const { data: activityTypes } = useQuery({
     queryKey: ['activity-types'],
@@ -53,16 +53,47 @@ export default function ActivityForm() {
   console.log('ActivityForm - organizations data:', organizations);
   console.log('ActivityForm - organizations error:', orgsError);
 
-  const { data: deals } = useQuery({
-    queryKey: ['deals-for-org', formData.relatedOrganizationId],
-    queryFn: () => dealAPI.getAll({ organizationId: formData.relatedOrganizationId, limit: 1000 }).then((r) => r.data),
-    enabled: Boolean(formData.relatedOrganizationId),
+  // Fetch all contacts when organizations are selected
+  const { data: contacts } = useQuery({
+    queryKey: ['contacts-for-orgs-activity', selectedOrganizations],
+    queryFn: async () => {
+      if (selectedOrganizations.length === 0) return { data: [] };
+      // Fetch contacts for all selected organizations
+      const allContacts: any[] = [];
+      const seenIds = new Set();
+      for (const orgId of selectedOrganizations) {
+        const response = await contactAPI.getAll({ organizationId: orgId, limit: 1000 });
+        for (const contact of response.data.data || []) {
+          if (!seenIds.has(contact.id)) {
+            seenIds.add(contact.id);
+            allContacts.push(contact);
+          }
+        }
+      }
+      return { data: allContacts };
+    },
+    enabled: selectedOrganizations.length > 0,
   });
 
-  const { data: contacts } = useQuery({
-    queryKey: ['contacts-for-org-activity', formData.relatedOrganizationId],
-    queryFn: () => contactAPI.getAll({ organizationId: formData.relatedOrganizationId, limit: 1000 }).then((r) => r.data),
-    enabled: Boolean(formData.relatedOrganizationId),
+  // Fetch deals for all selected organizations
+  const { data: deals } = useQuery({
+    queryKey: ['deals-for-orgs', selectedOrganizations],
+    queryFn: async () => {
+      if (selectedOrganizations.length === 0) return { data: [] };
+      const allDeals: any[] = [];
+      const seenIds = new Set();
+      for (const orgId of selectedOrganizations) {
+        const response = await dealAPI.getAll({ organizationId: orgId, limit: 1000 });
+        for (const deal of response.data.data || []) {
+          if (!seenIds.has(deal.id)) {
+            seenIds.add(deal.id);
+            allDeals.push(deal);
+          }
+        }
+      }
+      return { data: allDeals };
+    },
+    enabled: selectedOrganizations.length > 0,
   });
 
   const { data: users } = useQuery({
@@ -94,12 +125,18 @@ export default function ActivityForm() {
         subject: activity.subject || '',
         description: activity.description || '',
         dueAt,
-        relatedOrganizationId: activity.relatedOrganizationId || '',
         relatedDealId: activity.relatedDealId || '',
         ownerUserId: activity.ownerUserId || '',
       });
       if (activity.contacts) {
         setSelectedContacts(activity.contacts.map((c: any) => c.contactId));
+      }
+      // Load organizations - support both new multi-org and legacy single org
+      if (activity.organizations && activity.organizations.length > 0) {
+        setSelectedOrganizations(activity.organizations.map((o: any) => o.organizationId));
+      } else if (activity.relatedOrganizationId) {
+        // Fallback for legacy single organization
+        setSelectedOrganizations([activity.relatedOrganizationId]);
       }
     }
   }, [activity]);
@@ -136,6 +173,7 @@ export default function ActivityForm() {
       subject: formData.subject,
       description: formData.description || '',
       contactIds: selectedContacts.length > 0 ? selectedContacts : [],
+      organizationIds: selectedOrganizations.length > 0 ? selectedOrganizations : [],
     };
 
     // Convert datetime-local format to ISO 8601
@@ -143,9 +181,6 @@ export default function ActivityForm() {
       data.dueAt = new Date(formData.dueAt).toISOString();
     }
 
-    if (formData.relatedOrganizationId) {
-      data.relatedOrganizationId = formData.relatedOrganizationId;
-    }
     if (formData.relatedDealId) {
       data.relatedDealId = formData.relatedDealId;
     }
@@ -239,15 +274,15 @@ export default function ActivityForm() {
           <h3 className="text-lg font-medium text-white mb-4">Related Records</h3>
 
           <div className="space-y-4">
-            <OrganizationSelect
+            <OrganizationMultiSelect
               organizations={organizations?.data || []}
-              value={formData.relatedOrganizationId}
-              onChange={(organizationId) => setFormData({ ...formData, relatedOrganizationId: organizationId })}
-              label="Organization"
-              placeholder="None"
+              selectedOrganizationIds={selectedOrganizations}
+              onChange={setSelectedOrganizations}
+              label="Organizations"
+              placeholder="Search organizations..."
             />
 
-            {formData.relatedOrganizationId && (
+            {selectedOrganizations.length > 0 && (
               <>
                 <DealSelect
                   deals={deals?.data || []}

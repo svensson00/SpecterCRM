@@ -131,7 +131,7 @@ export default function Import() {
   });
 
   const validateFilenames = (files: FileList): { valid: boolean; message: string } => {
-    const validNames = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv'];
+    const validNames = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv', 'Meetings.csv'];
     const uploadedNames = Array.from(files).map(f => f.name);
     const invalidFiles = uploadedNames.filter(name => !validNames.includes(name));
 
@@ -235,6 +235,7 @@ export default function Import() {
               <li className="text-green-400">Contacts.csv</li>
               <li className="text-green-400">Deals.csv</li>
               <li className="text-green-400">Activities.csv</li>
+              <li className="text-green-400">Meetings.csv <span className="text-gray-400">(optional - links contacts to activities)</span></li>
             </ul>
           </li>
           <li>Upload the CSV files using the form below</li>
@@ -275,7 +276,7 @@ export default function Import() {
                 cursor-pointer"
             />
             <p className="mt-1 text-xs text-gray-400">
-              Files must be named: <span className="font-mono text-green-400">Organizations.csv</span>, <span className="font-mono text-green-400">Contacts.csv</span>, <span className="font-mono text-green-400">Deals.csv</span>, <span className="font-mono text-green-400">Activities.csv</span>
+              Files must be named: <span className="font-mono text-green-400">Organizations.csv</span>, <span className="font-mono text-green-400">Contacts.csv</span>, <span className="font-mono text-green-400">Deals.csv</span>, <span className="font-mono text-green-400">Activities.csv</span>, <span className="font-mono text-green-400">Meetings.csv</span> (optional)
             </p>
           </div>
 
@@ -346,6 +347,23 @@ export default function Import() {
                     </div>
                   );
                 })}
+                {/* Optional file */}
+                {(() => {
+                  const isUploaded = files.some((f: UploadedFile) => f.filename === 'Meetings.csv');
+                  return (
+                    <div className="flex items-center gap-2 text-xs col-span-2 mt-1 pt-1 border-t border-dark-700">
+                      {isUploaded ? (
+                        <span className="text-green-400">✓</span>
+                      ) : (
+                        <span className="text-gray-500">○</span>
+                      )}
+                      <span className={`font-mono ${isUploaded ? 'text-green-400' : 'text-gray-500'}`}>
+                        Meetings.csv
+                      </span>
+                      <span className="text-gray-500">(optional - links contacts to activities)</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
