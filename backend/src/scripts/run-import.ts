@@ -29,7 +29,8 @@ import { PrismaClient } from '@prisma/client';
 import { importOrganizationsFromCSV, saveOrganizationMapping } from './import-organizations';
 import { importContactsFromCSV, saveContactMapping } from './import-contacts';
 import { importDealsFromCSV, saveDealMapping } from './import-deals';
-import { importActivitiesFromCSV } from './import-activities';
+import { importActivitiesFromCSV, saveActivityMapping } from './import-activities';
+import { importMeetingParticipantsFromCSV, loadMapping } from './import-meeting-participants';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as readline from 'readline';
@@ -556,7 +557,7 @@ async function runImport() {
 
     // Step 1: Build user mappings
     console.log('='.repeat(70));
-    console.log('Step 1/5: Building user mappings');
+    console.log('Step 1/6: Building user mappings');
     console.log('='.repeat(70));
     const { mapping: userMapping, users } = await buildUserMappings(config.tenantId);
 
@@ -588,7 +589,7 @@ async function runImport() {
 
     // Step 2: Import Organizations
     console.log('='.repeat(70));
-    console.log('Step 2/5: Importing Organizations');
+    console.log('Step 2/6: Importing Organizations');
     console.log('='.repeat(70));
     await updateJobStatus(config.importJobId, {
       currentFile: 'Organizations.csv',
@@ -611,7 +612,7 @@ async function runImport() {
 
     // Step 3: Import Contacts
     console.log('\n' + '='.repeat(70));
-    console.log('Step 3/5: Importing Contacts');
+    console.log('Step 3/6: Importing Contacts');
     console.log('='.repeat(70));
     await updateJobStatus(config.importJobId, {
       currentFile: 'Contacts.csv',
@@ -636,7 +637,7 @@ async function runImport() {
 
     // Step 4: Import Deals
     console.log('\n' + '='.repeat(70));
-    console.log('Step 4/5: Importing Deals');
+    console.log('Step 4/6: Importing Deals');
     console.log('='.repeat(70));
     await updateJobStatus(config.importJobId, {
       currentFile: 'Deals.csv',
@@ -662,7 +663,7 @@ async function runImport() {
 
     // Step 5: Import Activities
     console.log('\n' + '='.repeat(70));
-    console.log('Step 5/5: Importing Activities');
+    console.log('Step 5/6: Importing Activities');
     console.log('='.repeat(70));
     await updateJobStatus(config.importJobId, {
       currentFile: 'Activities.csv',
@@ -677,10 +678,40 @@ async function runImport() {
         deals: dealStats.idMapping
       }
     );
+    await saveActivityMapping(
+      activityStats.idMapping,
+      path.join(config.mappingsDir, 'activities.json')
+    );
     await updateJobStatus(config.importJobId, {
       filesProcessed: 4,
       recordsImported: orgStats.success + contactStats.success + dealStats.success + activityStats.success,
     });
+
+    // Step 6: Import Meeting Participants (link contacts to activities)
+    console.log('\n' + '='.repeat(70));
+    console.log('Step 6/6: Importing Meeting Participants');
+    console.log('='.repeat(70));
+    const meetingsFilePath = path.join(config.importDir, 'Meetings.csv');
+    let meetingParticipantsStats = { total: 0, success: 0, skipped: 0, errors: 0, linkedActivities: new Set<string>(), linkedContacts: new Set<string>(), errorDetails: [] as any[] };
+
+    if (fs.existsSync(meetingsFilePath)) {
+      await updateJobStatus(config.importJobId, {
+        currentFile: 'Meetings.csv',
+      });
+      meetingParticipantsStats = await importMeetingParticipantsFromCSV(
+        meetingsFilePath,
+        {
+          activities: activityStats.idMapping,
+          contacts: contactStats.idMapping
+        }
+      );
+      await updateJobStatus(config.importJobId, {
+        filesProcessed: 5,
+        recordsImported: orgStats.success + contactStats.success + dealStats.success + activityStats.success + meetingParticipantsStats.success,
+      });
+    } else {
+      console.log('⚠️  Meetings.csv not found, skipping meeting participants import');
+    }
 
     // Final summary
     console.log('\n' + '='.repeat(70));
@@ -695,13 +726,15 @@ async function runImport() {
     console.log(`  Contacts:      ${contactStats.success} of ${contactStats.total} (${contactStats.errors} errors, ${contactStats.skipped} skipped)`);
     console.log(`  Deals:         ${dealStats.success} of ${dealStats.total} (${dealStats.errors} errors, ${dealStats.skipped} skipped)`);
     console.log(`  Activities:    ${activityStats.success} of ${activityStats.total} (${activityStats.errors} errors, ${activityStats.skipped} skipped)`);
+    console.log(`  Meeting Participants: ${meetingParticipantsStats.success} links created (${meetingParticipantsStats.linkedActivities.size} activities, ${meetingParticipantsStats.linkedContacts.size} contacts)`);
     console.log();
     console.log('Total records imported:',
       orgStats.success + contactStats.success + dealStats.success + activityStats.success
     );
+    console.log('Total activity-contact links:', meetingParticipantsStats.success);
     console.log();
 
-    const totalErrors = orgStats.errors + contactStats.errors + dealStats.errors + activityStats.errors;
+    const totalErrors = orgStats.errors + contactStats.errors + dealStats.errors + activityStats.errors + meetingParticipantsStats.errors;
     if (totalErrors > 0) {
       console.log(`⚠️  ${totalErrors} total errors occurred during import.`);
       console.log('Review the error details above to see which records failed.');

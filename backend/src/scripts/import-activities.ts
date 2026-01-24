@@ -33,6 +33,7 @@ interface ImportStats {
   skipped: number;
   errors: number;
   errorDetails: Array<{ row: number; reason: string; data: any }>;
+  idMapping: Map<string, string>; // oldId -> newId
 }
 
 /**
@@ -149,7 +150,7 @@ async function importActivity(
   tenantId: string,
   systemUserId: string,
   mappings: ImportMappings
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; newId?: string; oldId?: string }> {
   try {
     // Skip deleted records
     if (row.Deleted === '1') {
@@ -217,7 +218,7 @@ async function importActivity(
     });
 
     console.log(`✓ Imported activity ${rowNumber}: ${activity.subject} (${activity.id})`);
-    return { success: true };
+    return { success: true, newId: activity.id, oldId: row.ID };
 
   } catch (error: any) {
     console.error(`✗ Failed to import activity ${rowNumber}:`, error.message);
@@ -239,7 +240,8 @@ async function importActivitiesFromCSV(
     success: 0,
     skipped: 0,
     errors: 0,
-    errorDetails: []
+    errorDetails: [],
+    idMapping: new Map()
   };
 
   return new Promise((resolve, reject) => {
@@ -266,6 +268,9 @@ async function importActivitiesFromCSV(
 
         if (result.success) {
           stats.success++;
+          if (result.oldId && result.newId) {
+            stats.idMapping.set(result.oldId, result.newId);
+          }
         } else if (result.error === 'Record marked as deleted') {
           stats.skipped++;
         } else {
@@ -295,12 +300,25 @@ async function importActivitiesFromCSV(
           }
         }
 
+        console.log(`ID mappings created: ${stats.idMapping.size}`);
         resolve(stats);
       })
       .on('error', (error) => {
         reject(error);
       });
   });
+}
+
+/**
+ * Save ID mapping to file
+ */
+export async function saveActivityMapping(
+  mapping: Map<string, string>,
+  outputPath: string
+): Promise<void> {
+  const mappingObj = Object.fromEntries(mapping);
+  fs.writeFileSync(outputPath, JSON.stringify(mappingObj, null, 2));
+  console.log(`✓ Saved activity ID mapping to ${outputPath}`);
 }
 
 /**
