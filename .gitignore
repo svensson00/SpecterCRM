@@ -40,6 +40,9 @@ coverage/
 # Uploads
 backend/uploads/
 
+# Import data files
+import/*.csv
+
 # Temporary test scripts
 backend/delete-demo-tenant.js
 backend/delete-duplicate.js
