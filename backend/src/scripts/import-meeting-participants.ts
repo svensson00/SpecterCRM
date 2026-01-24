@@ -45,11 +45,10 @@ async function importMeetingParticipantsFromCSV(
     linkedContacts: new Set()
   };
 
-  return new Promise((resolve, reject) => {
-    let rowNumber = 0;
-    const processedPairs = new Set<string>(); // Track activity-contact pairs to avoid duplicates
+  // First, collect all rows from the CSV
+  const rows: any[] = await new Promise((resolve, reject) => {
+    const collectedRows: any[] = [];
 
-    // Use latin1 encoding to handle Swedish/European characters
     fs.createReadStream(csvFilePath, { encoding: 'latin1' })
       .pipe(csv({
         skipLines: 0,
@@ -63,132 +62,142 @@ async function importMeetingParticipantsFromCSV(
           return cleanHeader;
         }
       }))
-      .on('data', async (row: any) => {
-        rowNumber++;
-        stats.total++;
-
-        const oldActivityId = row['ID'];
-        const oldContactId = row['Contact ID'];
-        const email = row['Email Address'];
-        const firstName = row['First Name'];
-        const lastName = row['Last Name'];
-
-        // Skip rows with empty activity ID or contact ID
-        if (!oldActivityId || oldActivityId.trim() === '') {
-          stats.skipped++;
-          return;
-        }
-
-        if (!oldContactId || oldContactId.trim() === '') {
-          // Log only if there's meaningful contact info but no ID
-          if (email || firstName || lastName) {
-            console.warn(`Row ${rowNumber}: Contact has no ID (${firstName} ${lastName} <${email}>), skipping`);
-          }
-          stats.skipped++;
-          return;
-        }
-
-        // Look up the new activity ID
-        const newActivityId = mappings.activities.get(oldActivityId);
-        if (!newActivityId) {
-          stats.errors++;
-          stats.errorDetails.push({
-            row: rowNumber,
-            reason: `Activity not found in mapping: ${oldActivityId}`,
-            data: row
-          });
-          return;
-        }
-
-        // Look up the new contact ID
-        const newContactId = mappings.contacts.get(oldContactId);
-        if (!newContactId) {
-          stats.errors++;
-          stats.errorDetails.push({
-            row: rowNumber,
-            reason: `Contact not found in mapping: ${oldContactId} (${firstName} ${lastName})`,
-            data: row
-          });
-          return;
-        }
-
-        // Check if this pair has already been processed (avoid duplicates)
-        const pairKey = `${newActivityId}:${newContactId}`;
-        if (processedPairs.has(pairKey)) {
-          stats.skipped++;
-          return;
-        }
-        processedPairs.add(pairKey);
-
-        try {
-          // Check if the link already exists
-          const existing = await prisma.activityContact.findUnique({
-            where: {
-              activityId_contactId: {
-                activityId: newActivityId,
-                contactId: newContactId
-              }
-            }
-          });
-
-          if (existing) {
-            stats.skipped++;
-            return;
-          }
-
-          // Create the activity-contact link
-          await prisma.activityContact.create({
-            data: {
-              activityId: newActivityId,
-              contactId: newContactId
-            }
-          });
-
-          stats.success++;
-          stats.linkedActivities.add(newActivityId);
-          stats.linkedContacts.add(newContactId);
-
-          console.log(`✓ Row ${rowNumber}: Linked contact ${firstName} ${lastName} to activity ${newActivityId}`);
-
-        } catch (error: any) {
-          // Handle unique constraint violation (shouldn't happen with our check, but just in case)
-          if (error.code === 'P2002') {
-            stats.skipped++;
-          } else {
-            stats.errors++;
-            stats.errorDetails.push({
-              row: rowNumber,
-              reason: error.message,
-              data: row
-            });
-          }
-        }
+      .on('data', (row: any) => {
+        collectedRows.push(row);
       })
       .on('end', () => {
-        console.log('\n=== Meeting Participants Import Summary ===');
-        console.log(`Total rows: ${stats.total}`);
-        console.log(`Successfully linked: ${stats.success}`);
-        console.log(`Skipped (duplicates/empty): ${stats.skipped}`);
-        console.log(`Errors: ${stats.errors}`);
-        console.log(`Unique activities with participants: ${stats.linkedActivities.size}`);
-        console.log(`Unique contacts linked: ${stats.linkedContacts.size}`);
-
-        if (stats.errorDetails.length > 0) {
-          console.log('\n=== Error Details ===');
-          stats.errorDetails.slice(0, 10).forEach(err => {
-            console.log(`Row ${err.row}: ${err.reason}`);
-          });
-          if (stats.errorDetails.length > 10) {
-            console.log(`... and ${stats.errorDetails.length - 10} more errors`);
-          }
-        }
-
-        resolve(stats);
+        resolve(collectedRows);
       })
       .on('error', (error) => {
         reject(error);
       });
   });
+
+  // Now process rows sequentially
+  const processedPairs = new Set<string>(); // Track activity-contact pairs to avoid duplicates
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNumber = i + 1;
+    stats.total++;
+
+    const oldActivityId = row['ID'];
+    const oldContactId = row['Contact ID'];
+    const email = row['Email Address'];
+    const firstName = row['First Name'];
+    const lastName = row['Last Name'];
+
+    // Skip rows with empty activity ID or contact ID
+    if (!oldActivityId || oldActivityId.trim() === '') {
+      stats.skipped++;
+      continue;
+    }
+
+    if (!oldContactId || oldContactId.trim() === '') {
+      // Log only if there's meaningful contact info but no ID
+      if (email || firstName || lastName) {
+        console.warn(`Row ${rowNumber}: Contact has no ID (${firstName} ${lastName} <${email}>), skipping`);
+      }
+      stats.skipped++;
+      continue;
+    }
+
+    // Look up the new activity ID
+    const newActivityId = mappings.activities.get(oldActivityId);
+    if (!newActivityId) {
+      stats.errors++;
+      stats.errorDetails.push({
+        row: rowNumber,
+        reason: `Activity not found in mapping: ${oldActivityId}`,
+        data: row
+      });
+      continue;
+    }
+
+    // Look up the new contact ID
+    const newContactId = mappings.contacts.get(oldContactId);
+    if (!newContactId) {
+      stats.errors++;
+      stats.errorDetails.push({
+        row: rowNumber,
+        reason: `Contact not found in mapping: ${oldContactId} (${firstName} ${lastName})`,
+        data: row
+      });
+      continue;
+    }
+
+    // Check if this pair has already been processed (avoid duplicates)
+    const pairKey = `${newActivityId}:${newContactId}`;
+    if (processedPairs.has(pairKey)) {
+      stats.skipped++;
+      continue;
+    }
+    processedPairs.add(pairKey);
+
+    try {
+      // Check if the link already exists
+      const existing = await prisma.activityContact.findUnique({
+        where: {
+          activityId_contactId: {
+            activityId: newActivityId,
+            contactId: newContactId
+          }
+        }
+      });
+
+      if (existing) {
+        stats.skipped++;
+        continue;
+      }
+
+      // Create the activity-contact link
+      await prisma.activityContact.create({
+        data: {
+          activityId: newActivityId,
+          contactId: newContactId
+        }
+      });
+
+      stats.success++;
+      stats.linkedActivities.add(newActivityId);
+      stats.linkedContacts.add(newContactId);
+
+      console.log(`✓ Row ${rowNumber}: Linked contact ${firstName} ${lastName} to activity ${newActivityId}`);
+
+    } catch (error: any) {
+      // Handle unique constraint violation (shouldn't happen with our check, but just in case)
+      if (error.code === 'P2002') {
+        stats.skipped++;
+      } else {
+        stats.errors++;
+        stats.errorDetails.push({
+          row: rowNumber,
+          reason: error.message,
+          data: row
+        });
+      }
+    }
+  }
+
+  console.log('\n=== Meeting Participants Import Summary ===');
+  console.log(`Total rows: ${stats.total}`);
+  console.log(`Successfully linked: ${stats.success}`);
+  console.log(`Skipped (duplicates/empty): ${stats.skipped}`);
+  console.log(`Errors: ${stats.errors}`);
+  console.log(`Unique activities with participants: ${stats.linkedActivities.size}`);
+  console.log(`Unique contacts linked: ${stats.linkedContacts.size}`);
+
+  if (stats.errorDetails.length > 0) {
+    console.log('\n=== Error Details ===');
+    stats.errorDetails.slice(0, 10).forEach(err => {
+      console.log(`Row ${err.row}: ${err.reason}`);
+    });
+    if (stats.errorDetails.length > 10) {
+      console.log(`... and ${stats.errorDetails.length - 10} more errors`);
+    }
+  }
+
+  return stats;
 }
 
 /**

@@ -122,9 +122,16 @@ export class ImportController {
         return;
       }
 
-      // Count expected CSV files (Organizations, Contacts, Deals, Activities)
-      const expectedFiles = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv'];
-      const csvFiles = files.filter(f => expectedFiles.includes(f));
+      // Count expected CSV files (Organizations, Contacts, Deals, Activities + optional Meetings)
+      const requiredFiles = ['Organizations.csv', 'Contacts.csv', 'Deals.csv', 'Activities.csv'];
+      const optionalFiles = ['Meetings.csv'];
+      const allExpectedFiles = [...requiredFiles, ...optionalFiles];
+      const csvFiles = files.filter(f => allExpectedFiles.includes(f));
+      const hasMeetingsFile = files.includes('Meetings.csv');
+
+      // Total steps: 4 main files + user mapping step + optional meetings step
+      // Step 1: User mappings, Steps 2-5: Organizations/Contacts/Deals/Activities, Step 6: Meetings (optional)
+      const totalSteps = hasMeetingsFile ? 5 : 4; // Files processed (not counting user mappings step)
 
       // Create import job record
       const importJob = await prisma.importJob.create({
@@ -133,7 +140,7 @@ export class ImportController {
           userId,
           status: 'PENDING',
           clearExisting: clearExisting || false,
-          totalFiles: csvFiles.length > 0 ? csvFiles.length : 4, // Default to 4 if files found
+          totalFiles: totalSteps,
         },
       });
 
