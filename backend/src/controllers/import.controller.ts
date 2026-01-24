@@ -138,11 +138,17 @@ export class ImportController {
       });
 
       // Start import process in background
+      // Determine project root (works for both src/ and dist/ execution)
+      const projectRoot = path.resolve(__dirname, '../..');
       const isProduction = process.env.NODE_ENV === 'production';
-      const scriptPath = path.join(__dirname, '../scripts/run-import.js');
+
+      // In production, use compiled JS in dist/; in development, use TS source with tsx
+      const scriptPath = isProduction
+        ? path.join(projectRoot, 'dist/scripts/run-import.js')
+        : path.join(projectRoot, 'src/scripts/run-import.ts');
 
       // Create log file for this import
-      const logDir = path.join(__dirname, '../../logs');
+      const logDir = path.join(projectRoot, 'logs');
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
@@ -154,7 +160,7 @@ export class ImportController {
 
         const importProcess = isProduction
           ? spawn('node', [scriptPath], {
-              cwd: path.join(__dirname, '../..'),
+              cwd: projectRoot,
               env: {
                 ...process.env,
                 TENANT_ID: tenantId,
@@ -166,8 +172,8 @@ export class ImportController {
               detached: true,
               stdio: ['ignore', logFd, logFd]
             })
-          : spawn('npx', ['ts-node', scriptPath.replace('.js', '.ts')], {
-              cwd: path.join(__dirname, '../..'),
+          : spawn('npx', ['tsx', scriptPath], {
+              cwd: projectRoot,
               env: {
                 ...process.env,
                 TENANT_ID: tenantId,
