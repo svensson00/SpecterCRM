@@ -7,7 +7,8 @@ import { DealStage } from '@prisma/client';
 
 export class DealController {
   static async create(req: AuthRequest, res: Response) {
-    const data = dealSchema.parse(req.body);
+    const parsed = dealSchema.parse(req.body);
+    const data = { ...parsed, expectedCloseDate: parsed.expectedCloseDate ?? undefined };
     const deal = await DealService.create(data, req.user!.tenantId, req.user!.userId);
     res.status(201).json(deal);
   }
@@ -31,7 +32,8 @@ export class DealController {
   }
 
   static async update(req: AuthRequest, res: Response) {
-    const data = dealSchema.partial().parse(req.body);
+    const parsed = dealSchema.partial().parse(req.body);
+    const data = { ...parsed, expectedCloseDate: parsed.expectedCloseDate ?? undefined };
     const deal = await DealService.update(
       req.params.id,
       data,

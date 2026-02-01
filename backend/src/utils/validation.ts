@@ -67,7 +67,7 @@ export const dealSchema = z.object({
   contactIds: z.array(z.string()).optional(),
   amount: z.number().optional(),
   currency: z.string().default('USD'),
-  expectedCloseDate: z.string().datetime().optional().or(z.literal('')),
+  expectedCloseDate: z.string().datetime().optional().or(z.literal('')).or(z.null()),
   stage: z.enum(['LEAD', 'PROSPECT', 'QUOTE', 'WON', 'LOST']).default('LEAD'),
   probability: z.number().min(0).max(100).optional(),
   reasonLost: z.string().optional(),
