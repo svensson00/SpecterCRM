@@ -186,6 +186,10 @@ export default function DealDetail() {
   };
 
   const handleSave = () => {
+    if (formData.stage === 'LOST' && !formData.reasonLost.trim()) {
+      alert('Please provide a reason for marking this deal as lost.');
+      return;
+    }
     const data: any = {
       title: formData.title,
       amount: parseFloat(formData.amount) || 0,
@@ -193,7 +197,7 @@ export default function DealDetail() {
       stage: formData.stage,
       probability: parseInt(formData.probability) || 0,
     };
-    if (formData.stage === 'LOST' && formData.reasonLost) {
+    if (formData.stage === 'LOST') {
       data.reasonLost = formData.reasonLost;
     }
     updateMutation.mutate(data);
@@ -514,18 +518,30 @@ export default function DealDetail() {
               <dt className="text-sm font-medium text-gray-400">Stage</dt>
               <dd className="text-sm text-white col-span-2">
                 {isEditing ? (
-                  <select
-                    name="stage"
-                    value={formData.stage}
-                    onChange={handleChange}
-                    className="block w-full bg-dark-800 border border-dark-700 text-white rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    {STAGES.map((stage) => (
-                      <option key={stage} value={stage}>
-                        {stage}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      name="stage"
+                      value={formData.stage}
+                      onChange={handleChange}
+                      className="block w-full bg-dark-800 border border-dark-700 text-white rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      {STAGES.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
+                    {formData.stage === 'LOST' && (
+                      <textarea
+                        name="reasonLost"
+                        value={formData.reasonLost}
+                        onChange={handleChange}
+                        rows={2}
+                        placeholder="Reason for loss (required)"
+                        className="block w-full bg-dark-800 border border-dark-700 text-white rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                      />
+                    )}
+                  </div>
                 ) : (
                   deal.stage
                 )}
