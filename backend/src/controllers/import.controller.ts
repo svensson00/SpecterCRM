@@ -4,9 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database';
 
 // Configure multer for file uploads
 const uploadDir = path.join(__dirname, '../../uploads/imports');

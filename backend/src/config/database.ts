@@ -8,11 +8,6 @@ const prismaBase = new PrismaClient({
   errorFormat: 'minimal',
 });
 
-// Add connection error handling
-prismaBase.$connect()
-  .then(() => logger.info('Database connected successfully'))
-  .catch((error) => logger.error('Database connection error:', error));
-
 // Handle disconnect events
 process.on('beforeExit', async () => {
   await prismaBase.$disconnect();
