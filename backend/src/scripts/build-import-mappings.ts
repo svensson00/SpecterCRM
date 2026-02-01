@@ -27,33 +27,40 @@ async function buildOrganizationMapping(
   tenantId: string
 ): Promise<Map<string, string>> {
   const mapping = new Map<string, string>();
+  const pendingOperations: Promise<void>[] = [];
 
   return new Promise((resolve, reject) => {
     fs.createReadStream(csvPath)
       .pipe(csv())
-      .on('data', async (row: OrganizationCSVRow) => {
+      .on('data', (row: OrganizationCSVRow) => {
         const oldId = row.ID;
         const name = row.Name;
 
         if (!oldId || !name) return;
 
-        // Find organization by name in tenant
-        const org = await prisma.organization.findFirst({
-          where: {
-            tenantId,
-            name: name.trim()
-          },
-          select: { id: true }
-        });
+        // Queue async operation to be awaited later
+        const operation = (async () => {
+          // Find organization by name in tenant
+          const org = await prisma.organization.findFirst({
+            where: {
+              tenantId,
+              name: name.trim()
+            },
+            select: { id: true }
+          });
 
-        if (org) {
-          mapping.set(oldId, org.id);
-          console.log(`Mapped org: ${name} (${oldId} -> ${org.id})`);
-        } else {
-          console.warn(`Organization not found: ${name}`);
-        }
+          if (org) {
+            mapping.set(oldId, org.id);
+            console.log(`Mapped org: ${name} (${oldId} -> ${org.id})`);
+          } else {
+            console.warn(`Organization not found: ${name}`);
+          }
+        })();
+        pendingOperations.push(operation);
       })
-      .on('end', () => {
+      .on('end', async () => {
+        // Wait for all async operations to complete before resolving
+        await Promise.all(pendingOperations);
         console.log(`✓ Built organization mapping: ${mapping.size} entries`);
         resolve(mapping);
       })
@@ -134,42 +141,49 @@ async function buildDealMapping(
   orgMapping: Map<string, string>
 ): Promise<Map<string, string>> {
   const mapping = new Map<string, string>();
+  const pendingOperations: Promise<void>[] = [];
 
   return new Promise((resolve, reject) => {
     fs.createReadStream(csvPath)
       .pipe(csv())
-      .on('data', async (row: any) => {
+      .on('data', (row: any) => {
         const oldId = row.ID;
         const title = row['Opportunity Name'];
         const accountName = row['Account Name'];
 
         if (!oldId || !title) return;
 
-        // Find organization first
-        const orgOldId = await findOrgOldIdByName(accountName, csvPath);
-        const orgNewId = orgOldId ? orgMapping.get(orgOldId) : null;
+        // Queue async operation to be awaited later
+        const operation = (async () => {
+          // Find organization first
+          const orgOldId = await findOrgOldIdByName(accountName, csvPath);
+          const orgNewId = orgOldId ? orgMapping.get(orgOldId) : null;
 
-        if (!orgNewId) {
-          console.warn(`Cannot map deal ${title}: organization ${accountName} not found`);
-          return;
-        }
+          if (!orgNewId) {
+            console.warn(`Cannot map deal ${title}: organization ${accountName} not found`);
+            return;
+          }
 
-        // Find deal by title and organization
-        const deal = await prisma.deal.findFirst({
-          where: {
-            tenantId,
-            organizationId: orgNewId,
-            title: title.trim()
-          },
-          select: { id: true }
-        });
+          // Find deal by title and organization
+          const deal = await prisma.deal.findFirst({
+            where: {
+              tenantId,
+              organizationId: orgNewId,
+              title: title.trim()
+            },
+            select: { id: true }
+          });
 
-        if (deal) {
-          mapping.set(oldId, deal.id);
-          console.log(`Mapped deal: ${title} (${oldId} -> ${deal.id})`);
-        }
+          if (deal) {
+            mapping.set(oldId, deal.id);
+            console.log(`Mapped deal: ${title} (${oldId} -> ${deal.id})`);
+          }
+        })();
+        pendingOperations.push(operation);
       })
-      .on('end', () => {
+      .on('end', async () => {
+        // Wait for all async operations to complete before resolving
+        await Promise.all(pendingOperations);
         console.log(`✓ Built deal mapping: ${mapping.size} entries`);
         resolve(mapping);
       })
