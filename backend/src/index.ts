@@ -1,4 +1,3 @@
-import { execSync } from 'child_process';
 import app from './app';
 import { logger } from './utils/logger';
 import prisma from './config/database';
@@ -8,11 +7,6 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
   try {
-    // Apply schema changes to database (idempotent)
-    logger.info('Running prisma db push...');
-    execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
-    logger.info('Database schema up to date');
-
     // Ensure database is connected before starting server
     await prisma.$connect();
     logger.info('Database connected successfully');
