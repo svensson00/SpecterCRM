@@ -37,8 +37,8 @@ export function mountOAuth(app: Express): void {
     });
   };
 
-  // Register on both paths: standard /.well-known/ and /api/.well-known/ (bypasses nginx deny rule on dotfiles)
-  for (const prefix of ['/.well-known', '/api/.well-known']) {
+  // Register on standard /.well-known/ paths and also under /oauth/ (nginx blocks all dot-prefixed paths)
+  for (const prefix of ['/.well-known', '/oauth']) {
     app.get(`${prefix}/oauth-protected-resource`, protectedResourceHandler);
     app.get(`${prefix}/oauth-authorization-server`, authServerHandler);
   }
