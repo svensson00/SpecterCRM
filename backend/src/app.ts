@@ -8,6 +8,8 @@ import routes from './routes';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 import prisma from './config/database';
+import { mountOAuth } from './oauth';
+import { mountMcp } from './mcp';
 
 dotenv.config();
 
@@ -104,6 +106,9 @@ app.get('/health/startup', (_req, res) => {
 });
 
 app.use('/api', routes);
+
+mountOAuth(app);
+mountMcp(app);
 
 app.use(notFound);
 app.use(errorHandler);
