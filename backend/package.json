@@ -28,6 +28,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@prisma/client": "^6.1.0",
     "@types/multer": "^2.0.0",
     "bcrypt": "^5.1.1",
