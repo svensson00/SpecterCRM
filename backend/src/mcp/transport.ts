@@ -52,7 +52,7 @@ export function createMcpRouter(): Router {
         const host = req.headers['x-forwarded-host'] || req.get('host');
         const baseUrl = process.env.BASE_URL || `${proto}://${host}`;
         res.status(401)
-          .set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+          .set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/api/.well-known/oauth-protected-resource"`)
           .json({ error: 'Unauthorized' });
         return;
       }

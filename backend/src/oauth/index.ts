@@ -10,7 +10,8 @@ function getBaseUrl(req: Request): string {
 
 export function mountOAuth(app: Express): void {
   // RFC 9728: Protected Resource Metadata
-  app.get('/.well-known/oauth-protected-resource', (req, res) => {
+  // Serve from both /.well-known/ (standard) and /api/.well-known/ (nginx workaround)
+  const protectedResourceHandler = (req: any, res: any) => {
     const baseUrl = getBaseUrl(req);
     res.json({
       resource: baseUrl,
@@ -18,10 +19,10 @@ export function mountOAuth(app: Express): void {
       bearer_methods_supported: ['header'],
       scopes_supported: ['crm:read', 'crm:write'],
     });
-  });
+  };
 
   // RFC 8414: OAuth Authorization Server Metadata
-  app.get('/.well-known/oauth-authorization-server', (req, res) => {
+  const authServerHandler = (req: any, res: any) => {
     const baseUrl = getBaseUrl(req);
     res.json({
       issuer: baseUrl,
@@ -34,7 +35,13 @@ export function mountOAuth(app: Express): void {
       token_endpoint_auth_methods_supported: ['none'],
       code_challenge_methods_supported: ['S256'],
     });
-  });
+  };
+
+  // Register on both paths: standard /.well-known/ and /api/.well-known/ (bypasses nginx deny rule on dotfiles)
+  for (const prefix of ['/.well-known', '/api/.well-known']) {
+    app.get(`${prefix}/oauth-protected-resource`, protectedResourceHandler);
+    app.get(`${prefix}/oauth-authorization-server`, authServerHandler);
+  }
 
   // Mount OAuth routes
   app.use('/oauth', createOAuthRouter());
