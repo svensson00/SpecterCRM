@@ -48,8 +48,8 @@ export function createMcpRouter(): Router {
     try {
       const auth = extractAuth(req);
       if (!auth) {
-        const proto = req.headers['x-forwarded-proto'] || req.protocol;
         const host = req.headers['x-forwarded-host'] || req.get('host');
+        const proto = process.env.NODE_ENV === 'production' ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol);
         const baseUrl = process.env.BASE_URL || `${proto}://${host}`;
         res.status(401)
           .set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/oauth/oauth-protected-resource"`)
