@@ -145,12 +145,7 @@ export class ImportController {
       // Start import process in background
       // Determine project root (works for both src/ and dist/ execution)
       const projectRoot = path.resolve(__dirname, '../..');
-      const isProduction = process.env.NODE_ENV === 'production';
-
-      // In production, use compiled JS in dist/; in development, use TS source with tsx
-      const scriptPath = isProduction
-        ? path.join(projectRoot, 'dist/scripts/run-import.js')
-        : path.join(projectRoot, 'src/scripts/run-import.ts');
+      const scriptPath = path.join(projectRoot, 'src/scripts/run-import.ts');
 
       // Create log file for this import
       const logDir = path.join(projectRoot, 'logs');
@@ -163,33 +158,19 @@ export class ImportController {
         // Open file descriptors for logging
         const logFd = fs.openSync(logFile, 'a');
 
-        const importProcess = isProduction
-          ? spawn('node', [scriptPath], {
-              cwd: projectRoot,
-              env: {
-                ...process.env,
-                TENANT_ID: tenantId,
-                ADMIN_USER_ID: userId,
-                IMPORT_DIR: importDir,
-                IMPORT_JOB_ID: importJob.id,
-                CLEAR_EXISTING: clearExisting ? 'true' : 'false',
-              },
-              detached: true,
-              stdio: ['ignore', logFd, logFd]
-            })
-          : spawn('npx', ['tsx', scriptPath], {
-              cwd: projectRoot,
-              env: {
-                ...process.env,
-                TENANT_ID: tenantId,
-                ADMIN_USER_ID: userId,
-                IMPORT_DIR: importDir,
-                IMPORT_JOB_ID: importJob.id,
-                CLEAR_EXISTING: clearExisting ? 'true' : 'false',
-              },
-              detached: true,
-              stdio: ['ignore', logFd, logFd]
-            });
+        const importProcess = spawn('npx', ['tsx', scriptPath], {
+            cwd: projectRoot,
+            env: {
+              ...process.env,
+              TENANT_ID: tenantId,
+              ADMIN_USER_ID: userId,
+              IMPORT_DIR: importDir,
+              IMPORT_JOB_ID: importJob.id,
+              CLEAR_EXISTING: clearExisting ? 'true' : 'false',
+            },
+            detached: true,
+            stdio: ['ignore', logFd, logFd]
+          });
 
         // Handle process errors
         importProcess.on('error', async (err) => {
