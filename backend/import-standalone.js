@@ -29,10 +29,10 @@ const env = {
 console.log('SpecterCRM Standalone Import Runner');
 console.log('====================================\n');
 
-// Run the TypeScript import script using ts-node
+// Run the TypeScript import script using tsx
 const scriptPath = path.join(__dirname, 'src', 'scripts', 'run-import.ts');
 
-const child = spawn('npx', ['ts-node', scriptPath, ...args], {
+const child = spawn('npx', ['tsx', scriptPath, ...args], {
   cwd: __dirname,
   env,
   stdio: 'inherit',
