@@ -14,6 +14,7 @@ export class ActivityController {
     const pagination = paginationSchema.parse(req.query);
     const result = await ActivityService.findAll({
       tenantId: req.user!.tenantId,
+      search: req.query.search as string,
       type: req.query.type as string,
       ownerUserId: req.query.ownerUserId as string,
       isCompleted: req.query.isCompleted === 'true' ? true : req.query.isCompleted === 'false' ? false : undefined,

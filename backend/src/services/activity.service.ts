@@ -75,6 +75,7 @@ export class ActivityService {
 
   static async findAll(params: {
     tenantId: string;
+    search?: string;
     type?: string;
     ownerUserId?: string;
     isCompleted?: boolean;
@@ -87,6 +88,7 @@ export class ActivityService {
   }) {
     const {
       tenantId,
+      search,
       type,
       ownerUserId,
       isCompleted,
@@ -99,6 +101,13 @@ export class ActivityService {
     } = params;
 
     const where: any = { tenantId };
+
+    if (search) {
+      where.OR = [
+        { subject: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     if (type) where.type = type;
     if (ownerUserId) where.ownerUserId = ownerUserId;

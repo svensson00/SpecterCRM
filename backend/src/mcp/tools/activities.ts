@@ -8,6 +8,7 @@ export function registerActivityTools(server: McpServer, auth: JWTPayload, wrapT
     'list_activities',
     'List all activities with optional filtering and pagination',
     {
+      search: z.string().optional().describe('Search by subject or description'),
       type: z.string().optional().describe('Filter by activity type (e.g., Workshop, POC Demo, Architecture Review)'),
       ownerUserId: z.string().optional().describe('Filter by owner user ID'),
       isCompleted: z.boolean().optional().describe('Filter by completion status'),
@@ -21,6 +22,7 @@ export function registerActivityTools(server: McpServer, auth: JWTPayload, wrapT
     wrapToolHandler(async (params: any) => {
       return ActivityService.findAll({
         tenantId: auth.tenantId,
+        search: params.search,
         type: params.type,
         ownerUserId: params.ownerUserId,
         isCompleted: params.isCompleted,
