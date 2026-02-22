@@ -97,16 +97,19 @@ export class OrganizationController {
   }
 
   static async getNotes(req: AuthRequest, res: Response) {
-    const notes = await NoteService.findByEntity(
+    const pagination = paginationSchema.parse(req.query);
+    const result = await NoteService.findByEntityPaginated(
       'ORGANIZATION',
       req.params.id,
-      req.user!.tenantId
+      req.user!.tenantId,
+      pagination.page,
+      pagination.limit
     );
-    res.json(notes);
+    res.json(result);
   }
 
   static async createNote(req: AuthRequest, res: Response) {
-    const { content } = noteSchema.parse(req.body);
+    const { content } = noteSchema.pick({ content: true }).parse(req.body);
     const note = await NoteService.create(
       {
         content,

@@ -47,6 +47,41 @@ export class NoteService {
     return notes;
   }
 
+  static async findByEntityPaginated(
+    entityType: NoteEntityType,
+    entityId: string,
+    tenantId: string,
+    page = 1,
+    limit = 20
+  ) {
+    const skip = (page - 1) * limit;
+    const where = { tenantId, entityType, entityId };
+
+    const [notes, total] = await Promise.all([
+      prisma.note.findMany({
+        where,
+        include: {
+          createdBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+          updatedBy: { select: { id: true, email: true, firstName: true, lastName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.note.count({ where }),
+    ]);
+
+    return {
+      data: notes,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   static async findById(id: string, tenantId: string) {
     const note = await prisma.note.findFirst({
       where: { id, tenantId },

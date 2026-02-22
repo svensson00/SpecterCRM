@@ -111,4 +111,15 @@ export function registerActivityTools(server: McpServer, auth: JWTPayload, wrapT
       return ActivityService.toggleComplete(params.id, auth.tenantId, auth.userId);
     })
   );
+
+  server.tool(
+    'delete_activity',
+    'Delete an activity',
+    {
+      id: z.string().describe('Activity ID'),
+    },
+    wrapToolHandler(async (params: any) => {
+      return ActivityService.delete(params.id, auth.tenantId, auth.userId);
+    })
+  );
 }

@@ -205,17 +205,8 @@ export default function Deals() {
         return;
       }
 
-      // Format deals with specific fields only
-      const formattedDeals = deals.map((deal: any) => ({
-        Title: deal.title || '',
-        Organization: deal.organization?.name || '',
-        Stage: deal.stage || '',
-        Amount: deal.amount || 0,
-        Probability: deal.probability !== null ? `${deal.probability}%` : '',
-        'Expected Close Date': deal.expectedCloseDate ? new Date(deal.expectedCloseDate).toLocaleDateString('sv-SE') : '',
-      }));
-
-      exportToCSV(formattedDeals, 'deals');
+      const flattened = flattenForExport(deals);
+      exportToCSV(flattened, 'deals');
     } catch (error) {
       alert('Error exporting deals');
     }
@@ -272,6 +263,7 @@ export default function Deals() {
               <button
                 key={stage}
                 onClick={() => toggleStage(stage)}
+                aria-pressed={selectedStages.includes(stage)}
                 className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
                   selectedStages.includes(stage)
                     ? STAGE_COLORS[stage]
@@ -298,7 +290,7 @@ export default function Deals() {
 
       {isLoading ? (
         <div className="text-center py-12">Loading...</div>
-      ) : (
+      ) : data?.data && data.data.length > 0 ? (
         <div className="card shadow overflow-hidden sm:rounded-lg">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700">
@@ -486,6 +478,16 @@ export default function Deals() {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : (
+        <div className="text-center py-12 card rounded-lg shadow">
+          <p className="text-gray-400">No deals found.</p>
+          <Link
+            to="/deals/new"
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+          >
+            Create your first deal
+          </Link>
         </div>
       )}
 
