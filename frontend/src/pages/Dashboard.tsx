@@ -233,8 +233,9 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-white">Pipeline by Stage</h2>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-400">Won/Lost Period:</label>
+              <label htmlFor="pipeline-period" className="text-xs text-gray-400">Won/Lost Period:</label>
               <select
+                id="pipeline-period"
                 value={pipelineDateFilter}
                 onChange={(e) => handlePipelineDateFilterChange(e.target.value as DateFilterOption)}
                 className="px-2 py-1 bg-dark-800 border border-dark-700 text-white text-xs rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
@@ -341,8 +342,9 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-white">Activity Volume</h2>
           <div className="flex items-center gap-2">
-            <label className="text-sm text-gray-400">Period:</label>
+            <label htmlFor="activity-period" className="text-sm text-gray-400">Period:</label>
             <select
+              id="activity-period"
               value={activityDateFilter}
               onChange={(e) => handleActivityDateFilterChange(e.target.value as DateFilterOption)}
               className="px-3 py-1.5 bg-dark-800 border border-dark-700 text-white text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"

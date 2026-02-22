@@ -48,4 +48,15 @@ export function registerNoteTools(server: McpServer, auth: JWTPayload, wrapToolH
       return NoteService.update(params.id, params.content, auth.tenantId, auth.userId);
     })
   );
+
+  server.tool(
+    'delete_note',
+    'Delete a note',
+    {
+      id: z.string().describe('Note ID'),
+    },
+    wrapToolHandler(async (params: any) => {
+      return NoteService.delete(params.id, auth.tenantId);
+    })
+  );
 }

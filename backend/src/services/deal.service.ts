@@ -287,10 +287,15 @@ export class DealService {
     });
   }
 
-  static async getPipeline(tenantId: string) {
+  static async getPipeline(tenantId: string, ownerUserId?: string) {
+    const where: any = { tenantId };
+    if (ownerUserId) {
+      where.ownerUserId = ownerUserId;
+    }
+
     const deals = await prisma.deal.groupBy({
       by: ['stage'],
-      where: { tenantId },
+      where,
       _count: { _all: true },
       _sum: { amount: true },
     });

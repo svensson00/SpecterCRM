@@ -117,7 +117,7 @@ export default function Contacts() {
 
       {isLoading ? (
         <div className="text-center py-12">Loading...</div>
-      ) : (
+      ) : data?.data && data.data.length > 0 ? (
         <div className="card shadow overflow-hidden sm:rounded-lg">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-700">
@@ -199,6 +199,16 @@ export default function Contacts() {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : (
+        <div className="text-center py-12 card rounded-lg shadow">
+          <p className="text-gray-400">No contacts found.</p>
+          <Link
+            to="/contacts/new"
+            className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+          >
+            Create your first contact
+          </Link>
         </div>
       )}
 

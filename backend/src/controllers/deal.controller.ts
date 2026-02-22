@@ -61,12 +61,19 @@ export class DealController {
   }
 
   static async getNotes(req: AuthRequest, res: Response) {
-    const notes = await NoteService.findByEntity('DEAL', req.params.id, req.user!.tenantId);
-    res.json(notes);
+    const pagination = paginationSchema.parse(req.query);
+    const result = await NoteService.findByEntityPaginated(
+      'DEAL',
+      req.params.id,
+      req.user!.tenantId,
+      pagination.page,
+      pagination.limit
+    );
+    res.json(result);
   }
 
   static async createNote(req: AuthRequest, res: Response) {
-    const { content } = noteSchema.parse(req.body);
+    const { content } = noteSchema.pick({ content: true }).parse(req.body);
     const note = await NoteService.create(
       { content, entityType: 'DEAL', entityId: req.params.id },
       req.user!.tenantId,
@@ -76,7 +83,8 @@ export class DealController {
   }
 
   static async getPipeline(req: AuthRequest, res: Response) {
-    const pipeline = await DealService.getPipeline(req.user!.tenantId);
+    const ownerUserId = req.query.ownerUserId as string | undefined;
+    const pipeline = await DealService.getPipeline(req.user!.tenantId, ownerUserId);
     res.json(pipeline);
   }
 

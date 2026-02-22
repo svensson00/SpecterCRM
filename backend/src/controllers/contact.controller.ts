@@ -69,12 +69,19 @@ export class ContactController {
   }
 
   static async getNotes(req: AuthRequest, res: Response) {
-    const notes = await NoteService.findByEntity('CONTACT', req.params.id, req.user!.tenantId);
-    res.json(notes);
+    const pagination = paginationSchema.parse(req.query);
+    const result = await NoteService.findByEntityPaginated(
+      'CONTACT',
+      req.params.id,
+      req.user!.tenantId,
+      pagination.page,
+      pagination.limit
+    );
+    res.json(result);
   }
 
   static async createNote(req: AuthRequest, res: Response) {
-    const { content } = noteSchema.parse(req.body);
+    const { content } = noteSchema.pick({ content: true }).parse(req.body);
     const note = await NoteService.create(
       { content, entityType: 'CONTACT', entityId: req.params.id },
       req.user!.tenantId,
