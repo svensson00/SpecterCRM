@@ -2,8 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { ReportService } from '../../services/report.service';
+import { WrapToolHandler } from '../server';
 
-export function registerReportTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerReportTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'get_pipeline_report',
     'Get pipeline summary report (count and total value by stage)',

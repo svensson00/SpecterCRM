@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { DealService } from '../../services/deal.service';
 import { DealStage } from '@prisma/client';
+import { WrapToolHandler } from '../server';
 
-export function registerDealTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerDealTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'list_deals',
     'List all deals with optional filtering, search, and pagination',

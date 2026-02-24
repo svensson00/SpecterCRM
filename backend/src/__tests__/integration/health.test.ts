@@ -60,4 +60,39 @@ describe('Health Endpoints', () => {
       expect(res.body).toHaveProperty('timestamp');
     });
   });
+
+  describe('Security Headers (issue #21)', () => {
+    it('should set Content-Security-Policy header', async () => {
+      const res = await request.get('/health');
+
+      expect(res.status).toBe(200);
+      expect(res.headers).toHaveProperty('content-security-policy');
+
+      const csp = res.headers['content-security-policy'];
+      expect(csp).toContain("default-src 'self'");
+      expect(csp).toContain("script-src 'self'");
+      expect(csp).toContain("style-src 'self'");
+    });
+
+    it('should set X-Content-Type-Options header', async () => {
+      const res = await request.get('/health');
+
+      expect(res.status).toBe(200);
+      expect(res.headers).toHaveProperty('x-content-type-options', 'nosniff');
+    });
+
+    it('should set X-Frame-Options header', async () => {
+      const res = await request.get('/health');
+
+      expect(res.status).toBe(200);
+      expect(res.headers).toHaveProperty('x-frame-options');
+    });
+
+    it('should set X-XSS-Protection header', async () => {
+      const res = await request.get('/health');
+
+      expect(res.status).toBe(200);
+      expect(res.headers).toHaveProperty('x-xss-protection');
+    });
+  });
 });

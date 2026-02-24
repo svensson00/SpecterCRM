@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
+import { AuditService } from './audit.service';
 import { NoteEntityType } from '@prisma/client';
 
 export class NoteService {
@@ -118,9 +119,20 @@ export class NoteService {
     return note;
   }
 
-  static async delete(id: string, tenantId: string) {
-    await this.findById(id, tenantId);
+  static async delete(id: string, tenantId: string, userId?: string) {
+    const note = await this.findById(id, tenantId);
     await prisma.note.delete({ where: { id } });
+
+    if (userId) {
+      await AuditService.log({
+        tenantId,
+        userId,
+        entityType: 'NOTE',
+        entityId: id,
+        action: 'DELETE',
+        beforeData: { content: note.content, entityType: note.entityType, entityId: note.entityId },
+      });
+    }
   }
 
   private static async validateEntity(

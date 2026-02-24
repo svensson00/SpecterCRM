@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { contactAPI } from '../lib/api';
@@ -13,10 +13,35 @@ export default function Contacts() {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  // Fetch all contacts for proper sorting
+  const ITEMS_PER_PAGE = 20;
+
+  // Map frontend sort fields to backend sort fields
+  const getSortBy = (field: SortField): string => {
+    switch (field) {
+      case 'name':
+        return 'firstName'; // Backend sorts by firstName for name
+      case 'organization':
+        return 'primaryOrganization'; // Backend relation sort
+      case 'owner':
+        return 'owner'; // Backend relation sort
+      default:
+        return 'firstName';
+    }
+  };
+
+  // Fetch contacts with server-side pagination and sorting
   const { data, isLoading } = useQuery({
-    queryKey: ['contacts', search],
-    queryFn: () => contactAPI.getAll({ search, limit: 10000 }).then(r => r.data),
+    queryKey: ['contacts', { search, page, sortBy: sortField, sortOrder: sortDirection }],
+    queryFn: () =>
+      contactAPI
+        .getAll({
+          search,
+          page,
+          limit: ITEMS_PER_PAGE,
+          sortBy: getSortBy(sortField),
+          sortOrder: sortDirection,
+        })
+        .then((r) => r.data),
   });
 
   const handleSort = (field: SortField) => {
@@ -26,53 +51,13 @@ export default function Contacts() {
       setSortField(field);
       setSortDirection('asc');
     }
+    setPage(1); // Reset to first page when sort changes
   };
 
-  const sortedContacts = useMemo(() => {
-    if (!data?.data) return [];
-
-    const contacts = [...data.data];
-    contacts.sort((a: any, b: any) => {
-      let aValue: string;
-      let bValue: string;
-
-      switch (sortField) {
-        case 'name':
-          aValue = `${a.firstName} ${a.lastName}`.toLowerCase();
-          bValue = `${b.firstName} ${b.lastName}`.toLowerCase();
-          break;
-        case 'organization':
-          aValue = (a.primaryOrganization?.name || '').toLowerCase();
-          bValue = (b.primaryOrganization?.name || '').toLowerCase();
-          break;
-        case 'owner':
-          aValue = a.owner ? `${a.owner.firstName} ${a.owner.lastName}`.toLowerCase() : '';
-          bValue = b.owner ? `${b.owner.firstName} ${b.owner.lastName}`.toLowerCase() : '';
-          break;
-        default:
-          return 0;
-      }
-
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return contacts;
-  }, [data?.data, sortField, sortDirection]);
-
-  // Client-side pagination
-  const ITEMS_PER_PAGE = 20;
-  const totalItems = sortedContacts.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
-  const startIndex = (page - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const paginatedContacts = sortedContacts.slice(startIndex, endIndex);
-
-  // Reset page if it exceeds total pages
-  if (page > totalPages && totalPages > 0 && !isLoading) {
-    setPage(totalPages);
-  }
+  // Reset to first page when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   const handleExport = async () => {
     try {
@@ -168,7 +153,7 @@ export default function Contacts() {
                 </tr>
               </thead>
               <tbody className="card divide-y divide-gray-700">
-                {paginatedContacts.map((contact: any) => (
+                {data.data.map((contact: any) => (
                   <tr key={contact.id} className="hover:bg-dark-900 transition-colors">
                     <td className="px-6 py-1.5 whitespace-nowrap">
                       <Link to={`/contacts/${contact.id}`} className="text-white hover:text-gray-200 font-medium text-sm">
@@ -212,7 +197,7 @@ export default function Contacts() {
         </div>
       )}
 
-      {totalItems > 0 && (
+      {data?.pagination && data.pagination.total > 0 && (
         <div className="mt-4 flex justify-between items-center">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -222,11 +207,12 @@ export default function Contacts() {
             Previous
           </button>
           <span className="text-sm text-gray-300">
-            Page {page} of {totalPages} ({totalItems} {totalItems === 1 ? 'contact' : 'contacts'})
+            Page {data.pagination.page} of {data.pagination.totalPages} ({data.pagination.total}{' '}
+            {data.pagination.total === 1 ? 'contact' : 'contacts'})
           </span>
           <button
             onClick={() => setPage(p => p + 1)}
-            disabled={page >= totalPages}
+            disabled={page >= data.pagination.totalPages}
             className="px-4 py-2 border border-dark-700 rounded-md text-sm font-medium text-gray-300 hover:bg-dark-900 disabled:opacity-50"
           >
             Next

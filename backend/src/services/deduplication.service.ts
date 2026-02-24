@@ -12,6 +12,18 @@ export class DeduplicationService {
       select: { id: true, name: true, website: true },
     });
 
+    // Fetch all existing pending suggestions upfront to avoid per-pair queries
+    const existingSuggestions = await prisma.duplicateSuggestion.findMany({
+      where: { tenantId, entityType: 'ORGANIZATION', status: 'PENDING' },
+      select: { entityId1: true, entityId2: true },
+    });
+    const existingPairKeys = new Set(
+      existingSuggestions.flatMap(s => [
+        `${s.entityId1}:${s.entityId2}`,
+        `${s.entityId2}:${s.entityId1}`,
+      ])
+    );
+
     const suggestions = [];
 
     for (let i = 0; i < organizations.length; i++) {
@@ -35,19 +47,8 @@ export class DeduplicationService {
         }
 
         if (score >= SIMILARITY_THRESHOLD) {
-          const existing = await prisma.duplicateSuggestion.findFirst({
-            where: {
-              tenantId,
-              entityType: 'ORGANIZATION',
-              status: 'PENDING',
-              OR: [
-                { entityId1: org1.id, entityId2: org2.id },
-                { entityId1: org2.id, entityId2: org1.id },
-              ],
-            },
-          });
-
-          if (!existing) {
+          const pairKey = `${org1.id}:${org2.id}`;
+          if (!existingPairKeys.has(pairKey)) {
             suggestions.push({
               tenantId,
               entityType: 'ORGANIZATION' as const,
@@ -55,6 +56,9 @@ export class DeduplicationService {
               entityId2: org2.id,
               similarityScore: score,
             });
+            // Add to set so we don't create duplicates within this run
+            existingPairKeys.add(pairKey);
+            existingPairKeys.add(`${org2.id}:${org1.id}`);
           }
         }
       }
@@ -78,6 +82,18 @@ export class DeduplicationService {
         emails: { select: { email: true } }
       },
     });
+
+    // Fetch all existing pending suggestions upfront
+    const existingSuggestions = await prisma.duplicateSuggestion.findMany({
+      where: { tenantId, entityType: 'CONTACT', status: 'PENDING' },
+      select: { entityId1: true, entityId2: true },
+    });
+    const existingPairKeys = new Set(
+      existingSuggestions.flatMap(s => [
+        `${s.entityId1}:${s.entityId2}`,
+        `${s.entityId2}:${s.entityId1}`,
+      ])
+    );
 
     const suggestions = [];
 
@@ -105,19 +121,8 @@ export class DeduplicationService {
         }
 
         if (score >= SIMILARITY_THRESHOLD) {
-          const existing = await prisma.duplicateSuggestion.findFirst({
-            where: {
-              tenantId,
-              entityType: 'CONTACT',
-              status: 'PENDING',
-              OR: [
-                { entityId1: contact1.id, entityId2: contact2.id },
-                { entityId1: contact2.id, entityId2: contact1.id },
-              ],
-            },
-          });
-
-          if (!existing) {
+          const pairKey = `${contact1.id}:${contact2.id}`;
+          if (!existingPairKeys.has(pairKey)) {
             suggestions.push({
               tenantId,
               entityType: 'CONTACT' as const,
@@ -125,6 +130,9 @@ export class DeduplicationService {
               entityId2: contact2.id,
               similarityScore: score,
             });
+            // Add to set so we don't create duplicates within this run
+            existingPairKeys.add(pairKey);
+            existingPairKeys.add(`${contact2.id}:${contact1.id}`);
           }
         }
       }
@@ -143,82 +151,59 @@ export class DeduplicationService {
       orderBy: { similarityScore: 'desc' },
     });
 
-    const enriched = await Promise.all(
-      suggestions.map(async (s) => {
-        let entity1, entity2;
+    if (suggestions.length === 0) return [];
 
-        if (entityType === 'ORGANIZATION') {
-          [entity1, entity2] = await Promise.all([
-            prisma.organization.findUnique({
-              where: { id: s.entityId1 },
-              select: {
-                id: true,
-                name: true,
-                website: true,
-                street: true,
-                city: true,
-                zip: true,
-                country: true,
-                createdAt: true,
-                updatedAt: true,
-                owner: { select: { firstName: true, lastName: true, email: true } },
-                _count: { select: { contacts: true, deals: true, activities: true } },
-              },
-            }),
-            prisma.organization.findUnique({
-              where: { id: s.entityId2 },
-              select: {
-                id: true,
-                name: true,
-                website: true,
-                street: true,
-                city: true,
-                zip: true,
-                country: true,
-                createdAt: true,
-                updatedAt: true,
-                owner: { select: { firstName: true, lastName: true, email: true } },
-                _count: { select: { contacts: true, deals: true, activities: true } },
-              },
-            }),
-          ]);
-        } else {
-          [entity1, entity2] = await Promise.all([
-            prisma.contact.findUnique({
-              where: { id: s.entityId1 },
-              include: {
-                emails: { select: { email: true, isPrimary: true } },
-                phones: { select: { phone: true, type: true, isPrimary: true } },
-                primaryOrganization: { select: { id: true, name: true } },
-                owner: { select: { firstName: true, lastName: true, email: true } },
-              },
-            }),
-            prisma.contact.findUnique({
-              where: { id: s.entityId2 },
-              include: {
-                emails: { select: { email: true, isPrimary: true } },
-                phones: { select: { phone: true, type: true, isPrimary: true } },
-                primaryOrganization: { select: { id: true, name: true } },
-                owner: { select: { firstName: true, lastName: true, email: true } },
-              },
-            }),
-          ]);
-        }
+    // Collect all unique entity IDs
+    const entityIds = [...new Set(suggestions.flatMap(s => [s.entityId1, s.entityId2]))];
 
-        return {
-          ...s,
-          entity1,
-          entity2,
-          // Add aliases for frontend compatibility
-          record1Id: s.entityId1,
-          record2Id: s.entityId2,
-          record1Data: entity1,
-          record2Data: entity2,
-        };
-      })
-    );
+    // Batch fetch all entities at once
+    let entityMap: Map<string, any>;
 
-    return enriched;
+    if (entityType === 'ORGANIZATION') {
+      const entities = await prisma.organization.findMany({
+        where: { id: { in: entityIds } },
+        select: {
+          id: true,
+          name: true,
+          website: true,
+          street: true,
+          city: true,
+          zip: true,
+          country: true,
+          createdAt: true,
+          updatedAt: true,
+          owner: { select: { firstName: true, lastName: true, email: true } },
+          _count: { select: { contacts: true, deals: true, activities: true } },
+        },
+      });
+      entityMap = new Map(entities.map(e => [e.id, e]));
+    } else {
+      const entities = await prisma.contact.findMany({
+        where: { id: { in: entityIds } },
+        include: {
+          emails: { select: { email: true, isPrimary: true } },
+          phones: { select: { phone: true, type: true, isPrimary: true } },
+          primaryOrganization: { select: { id: true, name: true } },
+          owner: { select: { firstName: true, lastName: true, email: true } },
+        },
+      });
+      entityMap = new Map(entities.map(e => [e.id, e]));
+    }
+
+    return suggestions.map(s => {
+      const entity1 = entityMap.get(s.entityId1) || null;
+      const entity2 = entityMap.get(s.entityId2) || null;
+      return {
+        ...s,
+        entity1,
+        entity2,
+        // Add aliases for frontend compatibility
+        record1Id: s.entityId1,
+        record2Id: s.entityId2,
+        record1Data: entity1,
+        record2Data: entity2,
+      };
+    });
   }
 
   static async merge(

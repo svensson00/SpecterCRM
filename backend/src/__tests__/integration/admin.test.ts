@@ -270,6 +270,56 @@ describe('Admin Endpoints', () => {
 
       expect(res.status).toBe(404);
     });
+
+    it('should prevent cross-tenant update (issue #20)', async () => {
+      const agent = createAuthenticatedAgent({ userId: adminUserId, tenantId: 'tenant-A', role: 'ADMIN' });
+
+      // Activity type belongs to tenant-B
+      const otherTenantType = {
+        id: 'type-other',
+        name: 'Workshop',
+        tenantId: 'tenant-B',
+        isActive: true,
+      };
+
+      // findFirst with tenantId filter will return null for other tenant's data
+      mockPrisma.activityType.findFirst.mockResolvedValue(null);
+
+      const res = await agent.patch('/api/admin/activity-types/type-other').send({
+        name: 'Hacked Workshop',
+      });
+
+      // Should verify tenant ownership and return 404
+      expect(mockPrisma.activityType.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'type-other',
+            tenantId: 'tenant-A',
+          }),
+        })
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it('should prevent cross-tenant delete (issue #20)', async () => {
+      const agent = createAuthenticatedAgent({ userId: adminUserId, tenantId: 'tenant-A', role: 'ADMIN' });
+
+      // Activity type belongs to tenant-B
+      mockPrisma.activityType.findFirst.mockResolvedValue(null);
+
+      const res = await agent.delete('/api/admin/activity-types/type-other');
+
+      // Should verify tenant ownership and return 404
+      expect(mockPrisma.activityType.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'type-other',
+            tenantId: 'tenant-A',
+          }),
+        })
+      );
+      expect(res.status).toBe(404);
+    });
   });
 
   describe('GET /admin/contact-roles', () => {
@@ -437,6 +487,48 @@ describe('Admin Endpoints', () => {
 
       const res = await agent.delete('/api/admin/contact-roles/nonexistent');
 
+      expect(res.status).toBe(404);
+    });
+
+    it('should prevent cross-tenant update (issue #20)', async () => {
+      const agent = createAuthenticatedAgent({ userId: adminUserId, tenantId: 'tenant-A', role: 'ADMIN' });
+
+      // Contact role belongs to tenant-B
+      mockPrisma.contactRole.findFirst.mockResolvedValue(null);
+
+      const res = await agent.patch('/api/admin/contact-roles/role-other').send({
+        name: 'Hacked CTO',
+      });
+
+      // Should verify tenant ownership and return 404
+      expect(mockPrisma.contactRole.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'role-other',
+            tenantId: 'tenant-A',
+          }),
+        })
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it('should prevent cross-tenant delete (issue #20)', async () => {
+      const agent = createAuthenticatedAgent({ userId: adminUserId, tenantId: 'tenant-A', role: 'ADMIN' });
+
+      // Contact role belongs to tenant-B
+      mockPrisma.contactRole.findFirst.mockResolvedValue(null);
+
+      const res = await agent.delete('/api/admin/contact-roles/role-other');
+
+      // Should verify tenant ownership and return 404
+      expect(mockPrisma.contactRole.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'role-other',
+            tenantId: 'tenant-A',
+          }),
+        })
+      );
       expect(res.status).toBe(404);
     });
   });

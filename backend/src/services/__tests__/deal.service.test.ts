@@ -477,6 +477,101 @@ describe('DealService', () => {
       });
     });
 
+    it('should set closedAt when stage moves to WON (issue #23)', async () => {
+      mockPrisma.deal.findFirst.mockResolvedValue(mockExistingDeal);
+      mockPrisma.deal.update.mockResolvedValue({
+        ...mockExistingDeal,
+        stage: 'WON',
+        closedAt: expect.any(Date),
+        organization: { id: 'org-123', name: 'Acme' },
+        owner: { id: 'user-1', email: 'user@example.com' },
+        contacts: [],
+      });
+
+      await DealService.update(
+        'deal-123',
+        { stage: 'WON' },
+        'tenant-123',
+        'user-789'
+      );
+
+      expect(mockPrisma.deal.update).toHaveBeenCalledWith({
+        where: { id: 'deal-123' },
+        data: expect.objectContaining({
+          stage: 'WON',
+          closedAt: expect.any(Date),
+          updatedByUserId: 'user-789',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('should set closedAt when stage moves to LOST (issue #23)', async () => {
+      mockPrisma.deal.findFirst.mockResolvedValue(mockExistingDeal);
+      mockPrisma.deal.update.mockResolvedValue({
+        ...mockExistingDeal,
+        stage: 'LOST',
+        reasonLost: 'Budget constraints',
+        closedAt: expect.any(Date),
+        organization: { id: 'org-123', name: 'Acme' },
+        owner: { id: 'user-1', email: 'user@example.com' },
+        contacts: [],
+      });
+
+      await DealService.update(
+        'deal-123',
+        { stage: 'LOST', reasonLost: 'Budget constraints' },
+        'tenant-123',
+        'user-789'
+      );
+
+      expect(mockPrisma.deal.update).toHaveBeenCalledWith({
+        where: { id: 'deal-123' },
+        data: expect.objectContaining({
+          stage: 'LOST',
+          reasonLost: 'Budget constraints',
+          closedAt: expect.any(Date),
+          updatedByUserId: 'user-789',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
+    it('should clear closedAt when reopening a deal (issue #23)', async () => {
+      const closedDeal = {
+        ...mockExistingDeal,
+        stage: 'WON',
+        closedAt: new Date(),
+      };
+
+      mockPrisma.deal.findFirst.mockResolvedValue(closedDeal);
+      mockPrisma.deal.update.mockResolvedValue({
+        ...closedDeal,
+        stage: 'PROSPECT',
+        closedAt: null,
+        organization: { id: 'org-123', name: 'Acme' },
+        owner: { id: 'user-1', email: 'user@example.com' },
+        contacts: [],
+      });
+
+      await DealService.update(
+        'deal-123',
+        { stage: 'PROSPECT' },
+        'tenant-123',
+        'user-789'
+      );
+
+      expect(mockPrisma.deal.update).toHaveBeenCalledWith({
+        where: { id: 'deal-123' },
+        data: expect.objectContaining({
+          stage: 'PROSPECT',
+          closedAt: null,
+          updatedByUserId: 'user-789',
+        }),
+        include: expect.any(Object),
+      });
+    });
+
     it('should delete and recreate contacts when contactIds provided', async () => {
       mockPrisma.deal.findFirst.mockResolvedValue(mockExistingDeal);
       mockPrisma.deal.update.mockResolvedValue({

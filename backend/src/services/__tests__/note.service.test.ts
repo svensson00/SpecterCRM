@@ -16,7 +16,16 @@ const mockPrisma = vi.hoisted(() => ({
 
 vi.mock('../../config/database', () => ({ default: mockPrisma }));
 
+const mockAuditService = vi.hoisted(() => ({
+  log: vi.fn(),
+}));
+
+vi.mock('../audit.service', () => ({
+  AuditService: mockAuditService,
+}));
+
 import { NoteService } from '../note.service';
+import { AuditService } from '../audit.service';
 
 describe('NoteService', () => {
   const tenantId = 'tenant-123';
@@ -341,6 +350,77 @@ describe('NoteService', () => {
       expect(mockPrisma.note.delete).toHaveBeenCalledWith({
         where: { id: noteId },
       });
+    });
+
+    it('should log audit when userId is provided (issue #26)', async () => {
+      const noteId = 'note-123';
+      const deleterId = 'deleter-123';
+
+      const mockNote = {
+        id: noteId,
+        content: 'Test note to delete',
+        entityType: 'ORGANIZATION' as const,
+        entityId,
+        tenantId,
+        createdAt: new Date(),
+        createdBy: {
+          id: userId,
+          email: 'user@test.com',
+          firstName: 'Test',
+          lastName: 'User',
+        },
+        updatedBy: null,
+      };
+
+      mockPrisma.note.findFirst.mockResolvedValue(mockNote);
+      mockPrisma.note.delete.mockResolvedValue(mockNote);
+
+      await NoteService.delete(noteId, tenantId, deleterId);
+
+      expect(mockPrisma.note.delete).toHaveBeenCalledWith({
+        where: { id: noteId },
+      });
+
+      expect(AuditService.log).toHaveBeenCalledWith({
+        tenantId,
+        userId: deleterId,
+        entityType: 'NOTE',
+        entityId: noteId,
+        action: 'DELETE',
+        beforeData: {
+          content: mockNote.content,
+          entityType: mockNote.entityType,
+          entityId: mockNote.entityId,
+        },
+      });
+    });
+
+    it('should not log audit when userId is not provided', async () => {
+      const noteId = 'note-123';
+
+      const mockNote = {
+        id: noteId,
+        content: 'Test note',
+        entityType: 'ORGANIZATION' as const,
+        entityId,
+        tenantId,
+        createdAt: new Date(),
+        createdBy: {
+          id: userId,
+          email: 'user@test.com',
+          firstName: 'Test',
+          lastName: 'User',
+        },
+        updatedBy: null,
+      };
+
+      mockPrisma.note.findFirst.mockResolvedValue(mockNote);
+      mockPrisma.note.delete.mockResolvedValue(mockNote);
+
+      await NoteService.delete(noteId, tenantId);
+
+      expect(mockPrisma.note.delete).toHaveBeenCalled();
+      expect(AuditService.log).not.toHaveBeenCalled();
     });
   });
 });

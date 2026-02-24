@@ -83,7 +83,7 @@ describe('NoteController', () => {
 
       await NoteController.delete(mockReq as AuthRequest, mockRes as Response);
 
-      expect(mockNoteService.delete).toHaveBeenCalledWith('note-123', 'tenant-123');
+      expect(mockNoteService.delete).toHaveBeenCalledWith('note-123', 'tenant-123', 'user-123');
       expect(statusMock).toHaveBeenCalledWith(204);
       expect(sendMock).toHaveBeenCalled();
     });

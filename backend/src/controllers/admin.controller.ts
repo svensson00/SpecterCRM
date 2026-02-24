@@ -66,6 +66,14 @@ export class AdminController {
   static async updateActivityType(req: AuthRequest, res: Response) {
     const { name, isActive } = req.body;
 
+    const existing = await prisma.activityType.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Activity type not found' });
+      return;
+    }
+
     const activityType = await prisma.activityType.update({
       where: { id: req.params.id },
       data: { name, isActive },
@@ -84,6 +92,14 @@ export class AdminController {
   }
 
   static async deleteActivityType(req: AuthRequest, res: Response) {
+    const existing = await prisma.activityType.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Activity type not found' });
+      return;
+    }
+
     await prisma.activityType.update({
       where: { id: req.params.id },
       data: { isActive: false },
@@ -133,6 +149,14 @@ export class AdminController {
   static async updateContactRole(req: AuthRequest, res: Response) {
     const { name, isActive } = req.body;
 
+    const existing = await prisma.contactRole.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Contact role not found' });
+      return;
+    }
+
     const contactRole = await prisma.contactRole.update({
       where: { id: req.params.id },
       data: { name, isActive },
@@ -151,6 +175,14 @@ export class AdminController {
   }
 
   static async deleteContactRole(req: AuthRequest, res: Response) {
+    const existing = await prisma.contactRole.findFirst({
+      where: { id: req.params.id, tenantId: req.user!.tenantId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Contact role not found' });
+      return;
+    }
+
     await prisma.contactRole.update({
       where: { id: req.params.id },
       data: { isActive: false },

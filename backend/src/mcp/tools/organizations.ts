@@ -2,8 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { OrganizationService } from '../../services/organization.service';
+import { NoteService } from '../../services/note.service';
+import { WrapToolHandler } from '../server';
 
-export function registerOrganizationTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerOrganizationTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'list_organizations',
     'List all organizations with optional filtering, search, and pagination',
@@ -151,6 +153,25 @@ export function registerOrganizationTools(server: McpServer, auth: JWTPayload, w
         params.page,
         params.limit,
         params.isCompleted
+      );
+    })
+  );
+
+  server.tool(
+    'get_organization_notes',
+    'Get all notes for a specific organization',
+    {
+      organizationId: z.string().describe('Organization ID'),
+      page: z.number().optional().describe('Page number (default: 1)'),
+      limit: z.number().optional().describe('Results per page (default: 20)'),
+    },
+    wrapToolHandler(async (params: any) => {
+      return NoteService.findByEntityPaginated(
+        'ORGANIZATION',
+        params.organizationId,
+        auth.tenantId,
+        params.page,
+        params.limit
       );
     })
   );

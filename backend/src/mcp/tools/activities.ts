@@ -2,8 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { ActivityService } from '../../services/activity.service';
+import { WrapToolHandler } from '../server';
 
-export function registerActivityTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerActivityTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'list_activities',
     'List all activities with optional filtering and pagination',

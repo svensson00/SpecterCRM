@@ -53,10 +53,11 @@ export class ReportService {
       where: {
         tenantId,
         OR: [{ stage: 'WON' }, { stage: 'LOST' }],
+        closedAt: { not: null },
       },
       select: {
         createdAt: true,
-        updatedAt: true,
+        closedAt: true,
         stage: true,
       },
     });
@@ -67,7 +68,7 @@ export class ReportService {
 
     const cycleTimes = closedDeals.map((deal) => {
       return Math.floor(
-        (deal.updatedAt.getTime() - deal.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+        (deal.closedAt!.getTime() - deal.createdAt.getTime()) / (1000 * 60 * 60 * 24)
       );
     });
 
@@ -126,35 +127,34 @@ export class ReportService {
   }
 
   static async getTopAccounts(tenantId: string, limit = 10) {
-    const organizations = await prisma.organization.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        name: true,
-        deals: {
-          where: { stage: 'WON' },
-          select: { amount: true },
-        },
-      },
-    });
+    // Use raw SQL to aggregate at the database level instead of loading all orgs
+    const results = await prisma.$queryRaw<Array<{
+      organization_id: string;
+      organization_name: string;
+      total_revenue: number;
+      deal_count: bigint;
+    }>>`
+      SELECT
+        o.id as organization_id,
+        o.name as organization_name,
+        COALESCE(SUM(d.amount), 0) as total_revenue,
+        COUNT(d.id) as deal_count
+      FROM organizations o
+      INNER JOIN deals d ON d.organization_id = o.id AND d.stage = 'WON'
+      WHERE o.tenant_id = ${tenantId}
+      GROUP BY o.id, o.name
+      HAVING COALESCE(SUM(d.amount), 0) > 0
+      ORDER BY total_revenue DESC
+      LIMIT ${limit}
+    `;
 
-    const topAccounts = organizations
-      .map((org) => {
-        const totalRevenue = org.deals.reduce((sum, deal) => sum + (deal.amount || 0), 0);
-        const dealCount = org.deals.length;
-        return {
-          organizationId: org.id,
-          organizationName: org.name,
-          totalRevenue,
-          dealCount,
-          avgDealSize: dealCount > 0 ? totalRevenue / dealCount : 0,
-        };
-      })
-      .filter((org) => org.totalRevenue > 0)
-      .sort((a, b) => b.totalRevenue - a.totalRevenue)
-      .slice(0, limit);
-
-    return topAccounts;
+    return results.map(r => ({
+      organizationId: r.organization_id,
+      organizationName: r.organization_name,
+      totalRevenue: Number(r.total_revenue),
+      dealCount: Number(r.deal_count),
+      avgDealSize: Number(r.deal_count) > 0 ? Number(r.total_revenue) / Number(r.deal_count) : 0,
+    }));
   }
 
   static async getForecast(tenantId: string) {

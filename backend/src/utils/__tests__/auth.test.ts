@@ -47,6 +47,17 @@ describe('auth utils', () => {
       const isValid = await verifyPassword(wrongPassword, hash);
       expect(isValid).toBe(false);
     });
+
+    it('should use 12 bcrypt rounds for consistency (issue #24)', async () => {
+      const password = 'TestPassword123!';
+      const hash = await hashPassword(password);
+
+      // Bcrypt hash format: $2b$rounds$salt+hash
+      // Extract the rounds part (characters 4-5)
+      const rounds = hash.substring(4, 6);
+
+      expect(rounds).toBe('12');
+    });
   });
 
   describe('JWT access tokens', () => {

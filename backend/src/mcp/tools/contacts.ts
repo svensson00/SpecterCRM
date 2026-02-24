@@ -2,8 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { ContactService } from '../../services/contact.service';
+import { NoteService } from '../../services/note.service';
+import { WrapToolHandler } from '../server';
 
-export function registerContactTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerContactTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'list_contacts',
     'List all contacts with optional filtering, search, and pagination',
@@ -134,6 +136,25 @@ export function registerContactTools(server: McpServer, auth: JWTPayload, wrapTo
         params.page,
         params.limit,
         params.isCompleted
+      );
+    })
+  );
+
+  server.tool(
+    'get_contact_notes',
+    'Get all notes for a specific contact',
+    {
+      contactId: z.string().describe('Contact ID'),
+      page: z.number().optional().describe('Page number (default: 1)'),
+      limit: z.number().optional().describe('Results per page (default: 20)'),
+    },
+    wrapToolHandler(async (params: any) => {
+      return NoteService.findByEntityPaginated(
+        'CONTACT',
+        params.contactId,
+        auth.tenantId,
+        params.page,
+        params.limit
       );
     })
   );

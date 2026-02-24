@@ -25,8 +25,8 @@ const storage = multer.diskStorage({
     cb(null, userUploadDir);
   },
   filename: (req, file, cb) => {
-    // Preserve original filename
-    cb(null, file.originalname);
+    // Sanitize filename to prevent path traversal
+    cb(null, path.basename(file.originalname));
   }
 });
 
@@ -98,13 +98,8 @@ export class ImportController {
         return;
       }
 
-      const { tenantId, clearExisting } = req.body;
-
-      if (!tenantId) {
-        res.status(400).json({ error: 'Tenant ID is required' });
-        return;
-      }
-
+      const tenantId = req.user.tenantId;
+      const { clearExisting } = req.body;
       const userId = req.user.userId;
       const importDir = path.join(uploadDir, userId);
 

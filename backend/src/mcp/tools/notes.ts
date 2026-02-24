@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { JWTPayload } from '../../utils/auth';
 import { NoteService } from '../../services/note.service';
 import { NoteEntityType } from '@prisma/client';
+import { WrapToolHandler } from '../server';
 
-export function registerNoteTools(server: McpServer, auth: JWTPayload, wrapToolHandler: any) {
+export function registerNoteTools(server: McpServer, auth: JWTPayload, wrapToolHandler: WrapToolHandler) {
   server.tool(
     'create_note',
     'Create a note attached to an organization, contact, or deal',
@@ -76,7 +77,8 @@ export function registerNoteTools(server: McpServer, auth: JWTPayload, wrapToolH
       id: z.string().describe('Note ID'),
     },
     wrapToolHandler(async (params: any) => {
-      return NoteService.delete(params.id, auth.tenantId);
+      await NoteService.delete(params.id, auth.tenantId, auth.userId);
+      return { success: true, message: 'Note deleted successfully' };
     })
   );
 }

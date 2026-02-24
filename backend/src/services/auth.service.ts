@@ -204,7 +204,16 @@ export class AuthService {
     }
 
     const resetToken = generatePasswordResetToken();
-    const expiresAt = new Date(Date.now() + 3600000);
+    const hashedToken = hashToken(resetToken);
+    const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: expiresAt,
+      },
+    });
 
     await AuditService.log({
       tenantId: user.tenantId,
@@ -218,12 +227,36 @@ export class AuthService {
   }
 
   static async resetPassword(token: string, newPassword: string) {
+    const hashedToken = hashToken(token);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: { gt: new Date() },
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new AppError(400, 'Invalid or expired reset token');
+    }
+
     const passwordHash = await hashPassword(newPassword);
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
+      },
+    });
+
     await AuditService.log({
-      tenantId: 'system',
+      tenantId: user.tenantId,
+      userId: user.id,
       entityType: 'USER',
-      entityId: 'unknown',
+      entityId: user.id,
       action: 'PASSWORD_RESET_COMPLETED',
     });
   }

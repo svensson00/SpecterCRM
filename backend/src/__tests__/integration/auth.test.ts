@@ -298,8 +298,25 @@ describe('Auth Endpoints', () => {
 
   describe('POST /api/auth/reset-password', () => {
     it('should return 200 when reset is successful', async () => {
+      // Mock user with valid reset token (hashed)
+      const resetToken = 'valid-reset-token';
+      const hashedToken = hashToken(resetToken);
+      const futureDate = new Date(Date.now() + 3600000); // 1 hour from now
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: userId,
+        email: 'user@demo.com',
+        passwordHash: 'old-hash',
+        tenantId,
+        isActive: true,
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: futureDate,
+      } as any);
+
+      mockPrisma.user.update.mockResolvedValue({} as any);
+
       const res = await request.post('/api/auth/reset-password').send({
-        token: 'valid-reset-token',
+        token: resetToken,
         newPassword: 'NewPassword123!',
       });
 

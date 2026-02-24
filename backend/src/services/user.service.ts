@@ -1,7 +1,7 @@
 import prisma from '../config/database';
 import { AppError } from '../middleware/errorHandler';
 import { AuditService } from './audit.service';
-import bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from '../utils/auth';
 
 export class UserService {
   static async findAll(params: {
@@ -177,13 +177,13 @@ export class UserService {
     }
 
     // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    const isValid = await verifyPassword(currentPassword, user.passwordHash);
     if (!isValid) {
       throw new AppError(401, 'Current password is incorrect');
     }
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
 
     await prisma.user.update({
       where: { id: userId },
@@ -208,7 +208,7 @@ export class UserService {
     await this.findById(targetUserId, tenantId);
 
     // Hash new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
 
     await prisma.user.update({
       where: { id: targetUserId },

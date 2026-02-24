@@ -33,6 +33,7 @@ const mockAuthUtils = vi.hoisted(() => ({
   generateRefreshToken: vi.fn(),
   verifyRefreshToken: vi.fn(),
   hashToken: vi.fn(),
+  generatePasswordResetToken: vi.fn(),
 }));
 
 vi.mock('../../utils/auth', () => mockAuthUtils);
@@ -313,6 +314,138 @@ describe('AuthService', () => {
       expect(mockPrisma.refreshToken.deleteMany).toHaveBeenCalledWith({
         where: { tokenHash },
       });
+    });
+  });
+
+  describe('requestPasswordReset (issue #17)', () => {
+    it('should hash reset token and store with expiry', async () => {
+      const mockUser = {
+        id: userId,
+        email: email.toLowerCase(),
+        tenantId,
+        isActive: true,
+      };
+
+      const mockResetToken = 'random-reset-token';
+      const mockHashedToken = 'hashed-reset-token';
+
+      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+      mockAuthUtils.generatePasswordResetToken.mockReturnValue(mockResetToken);
+      mockAuthUtils.hashToken.mockReturnValue(mockHashedToken);
+
+      const result = await AuthService.requestPasswordReset(email);
+
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: { email: email.toLowerCase(), isActive: true },
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          passwordResetToken: mockHashedToken,
+          passwordResetExpiry: expect.any(Date),
+        },
+      });
+
+      expect(AuditService.log).toHaveBeenCalledWith({
+        tenantId,
+        userId,
+        entityType: 'USER',
+        entityId: userId,
+        action: 'PASSWORD_RESET_REQUESTED',
+      });
+
+      expect(result).toHaveProperty('email', email.toLowerCase());
+    });
+
+    it('should return success even when user not found (security)', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      const result = await AuthService.requestPasswordReset('nonexistent@example.com');
+
+      expect(result).toBeUndefined();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+      expect(AuditService.log).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword (issue #17)', () => {
+    it('should hash token, verify expiry, and update password', async () => {
+      const resetToken = 'valid-reset-token';
+      const hashedToken = 'hashed-reset-token';
+      const newPassword = 'NewPassword123!';
+      const newPasswordHash = '$2b$12$newhashedpassword';
+      const futureDate = new Date(Date.now() + 3600000); // 1 hour from now
+
+      const mockUser = {
+        id: userId,
+        email,
+        tenantId,
+        isActive: true,
+        passwordResetToken: hashedToken,
+        passwordResetExpiry: futureDate,
+      };
+
+      mockAuthUtils.hashToken.mockReturnValue(hashedToken);
+      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+      mockAuthUtils.hashPassword.mockResolvedValue(newPasswordHash);
+
+      await AuthService.resetPassword(resetToken, newPassword);
+
+      expect(mockAuthUtils.hashToken).toHaveBeenCalledWith(resetToken);
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
+        where: {
+          passwordResetToken: hashedToken,
+          passwordResetExpiry: { gt: expect.any(Date) },
+          isActive: true,
+        },
+      });
+
+      expect(mockAuthUtils.hashPassword).toHaveBeenCalledWith(newPassword);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: {
+          passwordHash: newPasswordHash,
+          passwordResetToken: null,
+          passwordResetExpiry: null,
+        },
+      });
+
+      expect(AuditService.log).toHaveBeenCalledWith({
+        tenantId,
+        userId,
+        entityType: 'USER',
+        entityId: userId,
+        action: 'PASSWORD_RESET_COMPLETED',
+      });
+    });
+
+    it('should throw 400 for invalid or expired token', async () => {
+      const resetToken = 'invalid-reset-token';
+      const hashedToken = 'hashed-invalid-token';
+
+      mockAuthUtils.hashToken.mockReturnValue(hashedToken);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        AuthService.resetPassword(resetToken, 'NewPassword123!')
+      ).rejects.toThrow(new AppError(400, 'Invalid or expired reset token'));
+
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+      expect(AuditService.log).not.toHaveBeenCalled();
+    });
+
+    it('should throw 400 for expired token', async () => {
+      const resetToken = 'expired-reset-token';
+      const hashedToken = 'hashed-expired-token';
+      const pastDate = new Date(Date.now() - 3600000); // 1 hour ago
+
+      mockAuthUtils.hashToken.mockReturnValue(hashedToken);
+      mockPrisma.user.findFirst.mockResolvedValue(null); // Won't find because expiry check fails
+
+      await expect(
+        AuthService.resetPassword(resetToken, 'NewPassword123!')
+      ).rejects.toThrow(new AppError(400, 'Invalid or expired reset token'));
     });
   });
 });

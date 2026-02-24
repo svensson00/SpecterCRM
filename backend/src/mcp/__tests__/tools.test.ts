@@ -186,6 +186,17 @@ describe('MCP Tool Registrations', () => {
       );
       expect(result).toHaveProperty('data');
     });
+
+    it('should register get_organization_notes tool (issue #14)', () => {
+      registerOrganizationTools(mockServer as any, auth, wrapToolHandler);
+
+      expect(mockServer.tool).toHaveBeenCalledWith(
+        'get_organization_notes',
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
   });
 
   describe('Contact Tools', () => {
@@ -238,6 +249,17 @@ describe('MCP Tool Registrations', () => {
 
       expect(mockServer.tool).toHaveBeenCalledWith(
         'delete_contact',
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+
+    it('should register get_contact_notes tool (issue #14)', () => {
+      registerContactTools(mockServer as any, auth, wrapToolHandler);
+
+      expect(mockServer.tool).toHaveBeenCalledWith(
+        'get_contact_notes',
         expect.any(String),
         expect.any(Object),
         expect.any(Function)

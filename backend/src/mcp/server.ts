@@ -12,8 +12,8 @@ import { registerReportTools } from './tools/reports';
 /**
  * Wrapper that handles errors and formats MCP responses
  */
-export function wrapToolHandler(handler: (params: any) => Promise<any>) {
-  return async (params: any) => {
+export function wrapToolHandler(handler: (params: Record<string, unknown>) => Promise<unknown>) {
+  return async (params: Record<string, unknown>) => {
     try {
       const result = await handler(params);
       return {
@@ -51,6 +51,8 @@ export function wrapToolHandler(handler: (params: any) => Promise<any>) {
     }
   };
 }
+
+export type WrapToolHandler = typeof wrapToolHandler;
 
 /**
  * Creates an MCP server instance with all tools registered for the authenticated user

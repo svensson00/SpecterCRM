@@ -206,6 +206,14 @@ export class DealService {
         reasonLost: data.reasonLost,
         ownerUserId: data.ownerUserId,
         updatedByUserId,
+        // Set closedAt when deal moves to WON or LOST
+        ...(data.stage && ['WON', 'LOST'].includes(data.stage) && !['WON', 'LOST'].includes(existing.stage)
+          ? { closedAt: new Date() }
+          : {}),
+        // Clear closedAt when reopening a closed deal
+        ...(data.stage && !['WON', 'LOST'].includes(data.stage) && ['WON', 'LOST'].includes(existing.stage)
+          ? { closedAt: null }
+          : {}),
         contacts: data.contactIds
           ? {
               create: data.contactIds.map((contactId) => ({

@@ -20,7 +20,7 @@ export class NoteController {
   }
 
   static async delete(req: AuthRequest, res: Response) {
-    await NoteService.delete(req.params.id, req.user!.tenantId);
+    await NoteService.delete(req.params.id, req.user!.tenantId, req.user!.userId);
     res.status(204).send();
   }
 }
