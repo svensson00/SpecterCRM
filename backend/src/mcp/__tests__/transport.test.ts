@@ -145,9 +145,28 @@ describe('MCP Transport', () => {
       expect(res.body).toHaveProperty('error', 'Missing mcp-session-id header');
     });
 
-    it('should return 404 when GET request with invalid session ID', async () => {
+    it('should return 401 when GET request without auth header', async () => {
       const res = await request(app)
         .get('/')
+        .set('mcp-session-id', 'some-session');
+
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('error', 'Unauthorized');
+    });
+
+    it('should return 404 when GET request with valid auth but invalid session ID', async () => {
+      const mockAuth: JWTPayload = {
+        userId: 'user-1',
+        tenantId: 'tenant-1',
+        email: 'admin@demo.com',
+        role: 'ADMIN',
+      };
+
+      mockVerifyAccessToken.mockReturnValue(mockAuth);
+
+      const res = await request(app)
+        .get('/')
+        .set('Authorization', 'Bearer valid-token')
         .set('mcp-session-id', 'invalid-session');
 
       expect(res.status).toBe(404);
@@ -161,9 +180,28 @@ describe('MCP Transport', () => {
       expect(res.body).toHaveProperty('error', 'Missing mcp-session-id header');
     });
 
-    it('should return 404 when DELETE request with invalid session ID', async () => {
+    it('should return 401 when DELETE request without auth header', async () => {
       const res = await request(app)
         .delete('/')
+        .set('mcp-session-id', 'some-session');
+
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty('error', 'Unauthorized');
+    });
+
+    it('should return 404 when DELETE request with valid auth but invalid session ID', async () => {
+      const mockAuth: JWTPayload = {
+        userId: 'user-1',
+        tenantId: 'tenant-1',
+        email: 'admin@demo.com',
+        role: 'ADMIN',
+      };
+
+      mockVerifyAccessToken.mockReturnValue(mockAuth);
+
+      const res = await request(app)
+        .delete('/')
+        .set('Authorization', 'Bearer valid-token')
         .set('mcp-session-id', 'invalid-session');
 
       expect(res.status).toBe(404);

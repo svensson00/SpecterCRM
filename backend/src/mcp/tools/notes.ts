@@ -27,6 +27,26 @@ export function registerNoteTools(server: McpServer, auth: JWTPayload, wrapToolH
   );
 
   server.tool(
+    'list_notes',
+    'List all notes for a specific entity',
+    {
+      entityType: z.enum(['ORGANIZATION', 'CONTACT', 'DEAL']).describe('Entity type (required)'),
+      entityId: z.string().describe('Entity ID (required)'),
+      page: z.number().optional().describe('Page number (default: 1)'),
+      limit: z.number().optional().describe('Results per page (default: 20)'),
+    },
+    wrapToolHandler(async (params: any) => {
+      return NoteService.findByEntityPaginated(
+        params.entityType as NoteEntityType,
+        params.entityId,
+        auth.tenantId,
+        params.page,
+        params.limit
+      );
+    })
+  );
+
+  server.tool(
     'get_note',
     'Get a specific note by ID',
     {

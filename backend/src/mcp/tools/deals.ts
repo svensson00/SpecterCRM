@@ -135,13 +135,4 @@ export function registerDealTools(server: McpServer, auth: JWTPayload, wrapToolH
       return { success: true, message: 'Deal deleted successfully' };
     })
   );
-
-  server.tool(
-    'get_pipeline_summary',
-    'Get a summary of the deal pipeline (count and total amount by stage)',
-    {},
-    wrapToolHandler(async () => {
-      return DealService.getPipeline(auth.tenantId);
-    })
-  );
 }

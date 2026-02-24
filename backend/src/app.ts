@@ -62,6 +62,7 @@ const authLimiter = rateLimit({
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api', generalLimiter);
+app.use('/mcp', generalLimiter);
 
 // Health check endpoints (no rate limiting for Kubernetes probes)
 // Liveness probe - checks if application is running

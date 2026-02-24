@@ -312,40 +312,6 @@ describe('MCP Tool Registrations', () => {
       );
     });
 
-    it('should register get_pipeline_summary tool', () => {
-      registerDealTools(mockServer as any, auth, wrapToolHandler);
-
-      expect(mockServer.tool).toHaveBeenCalledWith(
-        'get_pipeline_summary',
-        expect.any(String),
-        expect.any(Object),
-        expect.any(Function)
-      );
-    });
-
-    it('get_pipeline_summary handler should call DealService with tenantId', async () => {
-      const mockPipelineData = [
-        { stage: 'LEAD', _count: { id: 5 }, _sum: { amount: 250000 } },
-      ];
-      mockPrisma.deal.groupBy.mockResolvedValue(mockPipelineData);
-
-      registerDealTools(mockServer as any, auth, wrapToolHandler);
-
-      const pipelineHandler = mockServer.tool.mock.calls.find(
-        (call) => call[0] === 'get_pipeline_summary'
-      )[3];
-
-      const result = await pipelineHandler({});
-
-      expect(mockPrisma.deal.groupBy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            tenantId: auth.tenantId,
-          }),
-        })
-      );
-      expect(result).toBeInstanceOf(Array);
-    });
   });
 
   describe('Activity Tools', () => {
@@ -417,6 +383,28 @@ describe('MCP Tool Registrations', () => {
   });
 
   describe('Note Tools', () => {
+    it('should register create_note tool', () => {
+      registerNoteTools(mockServer as any, auth, wrapToolHandler);
+
+      expect(mockServer.tool).toHaveBeenCalledWith(
+        'create_note',
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+
+    it('should register list_notes tool', () => {
+      registerNoteTools(mockServer as any, auth, wrapToolHandler);
+
+      expect(mockServer.tool).toHaveBeenCalledWith(
+        'list_notes',
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+
     it('should register get_note tool', () => {
       registerNoteTools(mockServer as any, auth, wrapToolHandler);
 
@@ -448,6 +436,27 @@ describe('MCP Tool Registrations', () => {
         expect.any(Object),
         expect.any(Function)
       );
+    });
+
+    it('list_notes handler should return paginated results', async () => {
+      const mockNotes = [
+        { id: 'note-1', content: 'Test note', entityType: 'ORGANIZATION', entityId: 'org-1' },
+      ];
+      mockPrisma.note.findMany.mockResolvedValue(mockNotes);
+      mockPrisma.note.count = vi.fn().mockResolvedValue(1);
+
+      registerNoteTools(mockServer as any, auth, wrapToolHandler);
+
+      const listHandler = mockServer.tool.mock.calls.find(
+        (call) => call[0] === 'list_notes'
+      )[3];
+
+      const result = await listHandler({ entityType: 'ORGANIZATION', entityId: 'org-1' });
+
+      expect(result).toHaveProperty('data');
+      expect(result).toHaveProperty('pagination');
+      expect(result.pagination).toHaveProperty('page');
+      expect(result.pagination).toHaveProperty('total');
     });
   });
 

@@ -114,9 +114,20 @@ export function createMcpRouter(): Router {
         return;
       }
 
+      const auth = extractAuth(req);
+      if (!auth) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
       const session = sessions.get(sessionId);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+
+      if (session.auth.userId !== auth.userId || session.auth.tenantId !== auth.tenantId) {
+        res.status(403).json({ error: 'Session does not belong to this user' });
         return;
       }
 
@@ -137,9 +148,20 @@ export function createMcpRouter(): Router {
         return;
       }
 
+      const auth = extractAuth(req);
+      if (!auth) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
       const session = sessions.get(sessionId);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
+        return;
+      }
+
+      if (session.auth.userId !== auth.userId || session.auth.tenantId !== auth.tenantId) {
+        res.status(403).json({ error: 'Session does not belong to this user' });
         return;
       }
 
@@ -147,8 +169,6 @@ export function createMcpRouter(): Router {
       await session.transport.close();
       sessions.delete(sessionId);
       logger.info(`Terminated MCP session ${sessionId}`);
-
-      res.status(200).json({ success: true });
     } catch (error) {
       logger.error('MCP DELETE handler error:', error);
       res.status(500).json({ error: 'Internal server error' });
