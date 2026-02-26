@@ -101,7 +101,9 @@ export function createMcpRouter(): Router {
       await session.transport.handleRequest(req, res, req.body);
     } catch (error) {
       logger.error('MCP POST handler error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   });
 
@@ -135,7 +137,9 @@ export function createMcpRouter(): Router {
       await session.transport.handleRequest(req, res, req.body);
     } catch (error) {
       logger.error('MCP GET handler error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   });
 
@@ -166,12 +170,18 @@ export function createMcpRouter(): Router {
       }
 
       await session.transport.handleRequest(req, res, req.body);
-      await session.transport.close();
+      try {
+        await session.transport.close();
+      } catch (closeError) {
+        logger.error(`Error closing MCP session ${sessionId}:`, closeError);
+      }
       sessions.delete(sessionId);
       logger.info(`Terminated MCP session ${sessionId}`);
     } catch (error) {
       logger.error('MCP DELETE handler error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
   });
 
