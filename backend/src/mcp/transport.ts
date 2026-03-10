@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
+import { TokenExpiredError } from 'jsonwebtoken';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { verifyAccessToken, JWTPayload } from '../utils/auth';
@@ -15,26 +16,68 @@ interface McpSession {
 
 const sessions = new Map<string, McpSession>();
 
-// Session timeout: 30 minutes
+// Session timeout: 30 minutes.
+// NOTE: This intentionally exceeds the default access token TTL (JWT_EXPIRES_IN = 15m)
+// so that sessions survive long enough for a client to refresh its token and continue
+// the same MCP conversation. In production, set JWT_EXPIRES_IN >= SESSION_TIMEOUT_MS
+// (e.g. JWT_EXPIRES_IN=35m) to prevent token expiry mid-session. See ADR-001.
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
 
 /**
- * Extract and verify JWT from Authorization header
+ * Discriminated union result from JWT extraction / verification.
+ * - ok: true  — token was valid; payload carries the decoded claims
+ * - ok: false — reason distinguishes the failure class so callers can return
+ *               RFC 6750-compliant WWW-Authenticate challenges
  */
-function extractAuth(req: Request): JWTPayload | null {
+type AuthResult =
+  | { ok: true; payload: JWTPayload }
+  | { ok: false; reason: 'missing' | 'expired' | 'invalid' };
+
+/**
+ * Extract and verify JWT from the Authorization header.
+ * Returns an AuthResult discriminated union instead of collapsing all failure
+ * cases into null, so callers can distinguish missing / expired / invalid tokens
+ * and return the appropriate RFC 6750 WWW-Authenticate challenge.
+ */
+function extractAuth(req: Request): AuthResult {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
+    return { ok: false, reason: 'missing' };
   }
 
   const token = authHeader.substring(7);
   try {
-    return verifyAccessToken(token);
+    const payload = verifyAccessToken(token);
+    return { ok: true, payload };
   } catch (error) {
-    logger.error('JWT verification failed:', error);
-    return null;
+    if (error instanceof TokenExpiredError) {
+      logger.warn('MCP JWT expired:', error.message);
+      return { ok: false, reason: 'expired' };
+    }
+    logger.error('MCP JWT verification failed:', error);
+    return { ok: false, reason: 'invalid' };
   }
+}
+
+/**
+ * Build a RFC 6750-compliant WWW-Authenticate header value for a given
+ * auth failure reason. The 'missing' case uses a plain Bearer challenge;
+ * 'expired' and 'invalid' use the error="invalid_token" code required by
+ * RFC 6750 §3.1 so that OAuth clients (e.g. Claude) can detect token expiry
+ * and invoke their refresh-token flow automatically.
+ */
+function wwwAuthenticateHeader(reason: 'missing' | 'expired' | 'invalid', resourceMetadataUrl?: string): string {
+  if (reason === 'missing') {
+    return resourceMetadataUrl
+      ? `Bearer resource_metadata="${resourceMetadataUrl}"`
+      : 'Bearer';
+  }
+  const description = reason === 'expired'
+    ? 'The access token expired'
+    : 'The access token is invalid';
+  const base = `Bearer error="invalid_token", error_description="${description}"`;
+  return resourceMetadataUrl ? `${base}, resource_metadata="${resourceMetadataUrl}"` : base;
 }
 
 /**
@@ -46,19 +89,33 @@ export function createMcpRouter(): Router {
   // POST handler - handles MCP requests
   router.post('/', async (req: Request, res: Response) => {
     try {
-      const auth = extractAuth(req);
-      if (!auth) {
-        const host = req.headers['x-forwarded-host'] || req.get('host');
-        const proto = process.env.NODE_ENV === 'production' ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol);
-        const baseUrl = process.env.BASE_URL || `${proto}://${host}`;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const proto = process.env.NODE_ENV === 'production' ? 'https' : (req.headers['x-forwarded-proto'] || req.protocol);
+      const baseUrl = process.env.BASE_URL || `${proto}://${host}`;
+      const resourceMetadataUrl = `${baseUrl}/oauth/oauth-protected-resource`;
+
+      const authResult = extractAuth(req);
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+      if (!authResult.ok) {
+        // If an existing session received an expired token, preserve the session so
+        // the client can refresh its token and continue the same MCP conversation
+        // without losing state. Return session_preserved: true to signal this.
+        if (authResult.reason === 'expired' && sessionId && sessions.has(sessionId)) {
+          logger.info(`MCP session ${sessionId}: token expired, session preserved for refresh`);
+          res.status(401)
+            .set('WWW-Authenticate', wwwAuthenticateHeader('expired', resourceMetadataUrl))
+            .json({ error: 'token_expired', session_preserved: true });
+          return;
+        }
+
         res.status(401)
-          .set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/oauth/oauth-protected-resource"`)
+          .set('WWW-Authenticate', wwwAuthenticateHeader(authResult.reason, resourceMetadataUrl))
           .json({ error: 'Unauthorized' });
         return;
       }
 
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
+      const auth = authResult.payload;
       let session: McpSession;
 
       if (!sessionId) {
@@ -116,12 +173,25 @@ export function createMcpRouter(): Router {
         return;
       }
 
-      const auth = extractAuth(req);
-      if (!auth) {
-        res.status(401).json({ error: 'Unauthorized' });
+      const authResult = extractAuth(req);
+      if (!authResult.ok) {
+        // Preserve the session on token expiry so the client can refresh and reconnect
+        // the SSE stream without losing conversation state.
+        if (authResult.reason === 'expired' && sessions.has(sessionId)) {
+          logger.info(`MCP session ${sessionId}: token expired on GET, session preserved for refresh`);
+          res.status(401)
+            .set('WWW-Authenticate', wwwAuthenticateHeader('expired'))
+            .json({ error: 'token_expired', session_preserved: true });
+          return;
+        }
+
+        res.status(401)
+          .set('WWW-Authenticate', wwwAuthenticateHeader(authResult.reason))
+          .json({ error: 'Unauthorized' });
         return;
       }
 
+      const auth = authResult.payload;
       const session = sessions.get(sessionId);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
@@ -152,12 +222,25 @@ export function createMcpRouter(): Router {
         return;
       }
 
-      const auth = extractAuth(req);
-      if (!auth) {
-        res.status(401).json({ error: 'Unauthorized' });
+      const authResult = extractAuth(req);
+      if (!authResult.ok) {
+        // Even on DELETE we preserve the session on token expiry — the client may
+        // attempt to terminate with a stale token and then retry after refreshing.
+        if (authResult.reason === 'expired' && sessions.has(sessionId)) {
+          logger.info(`MCP session ${sessionId}: token expired on DELETE, session preserved for refresh`);
+          res.status(401)
+            .set('WWW-Authenticate', wwwAuthenticateHeader('expired'))
+            .json({ error: 'token_expired', session_preserved: true });
+          return;
+        }
+
+        res.status(401)
+          .set('WWW-Authenticate', wwwAuthenticateHeader(authResult.reason))
+          .json({ error: 'Unauthorized' });
         return;
       }
 
+      const auth = authResult.payload;
       const session = sessions.get(sessionId);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
