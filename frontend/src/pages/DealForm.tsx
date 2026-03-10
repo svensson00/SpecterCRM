@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealAPI, organizationAPI, contactAPI, userAPI, adminAPI } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import UserSelect from '../components/UserSelect';
 import OrganizationSelect from '../components/OrganizationSelect';
 import ContactMultiSelect from '../components/ContactMultiSelect';
@@ -26,6 +27,7 @@ export default function DealForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
   const preselectedOrgId = searchParams.get('organizationId');
@@ -43,7 +45,7 @@ export default function DealForm() {
     expectedCloseDate: '',
     stage: 'LEAD',
     probability: '50',
-    ownerUserId: '',
+    ownerUserId: user?.id || '',
     reasonLost: '',
   });
 

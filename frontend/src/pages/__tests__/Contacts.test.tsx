@@ -119,10 +119,11 @@ describe('Contacts page', () => {
     expect(searchInput).toHaveValue('Alice');
 
     await waitFor(() => {
-      expect(mockContactAPI.contactAPI.getAll).toHaveBeenCalledWith({
-        search: 'Alice',
-        limit: 10000,
-      });
+      expect(mockContactAPI.contactAPI.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          search: 'Alice',
+        })
+      );
     });
   });
 

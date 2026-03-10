@@ -19,11 +19,6 @@ const createTestQueryClient = () => {
         retry: false,
       },
     },
-    logger: {
-      log: console.log,
-      warn: console.warn,
-      error: () => {}, // Suppress error logs in tests
-    },
   });
 };
 

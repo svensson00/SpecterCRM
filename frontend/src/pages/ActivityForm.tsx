@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { activityAPI, organizationAPI, contactAPI, dealAPI, userAPI, adminAPI } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import UserSelect from '../components/UserSelect';
 import OrganizationMultiSelect from '../components/OrganizationMultiSelect';
 import ContactMultiSelect from '../components/ContactMultiSelect';
@@ -11,7 +12,10 @@ export default function ActivityForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const preselectedDealId = searchParams.get('dealId');
 
   // Generate default date/time (current date and time) for new activities
   const getDefaultDueAt = () => {
@@ -31,7 +35,7 @@ export default function ActivityForm() {
     description: '',
     dueAt: getDefaultDueAt(),
     relatedDealId: '',
-    ownerUserId: '',
+    ownerUserId: user?.id || '',
   });
 
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -101,11 +105,28 @@ export default function ActivityForm() {
     queryFn: () => userAPI.getAll().then((r) => r.data),
   });
 
+  const { data: preselectedDeal } = useQuery({
+    queryKey: ['deal', preselectedDealId],
+    queryFn: () => dealAPI.getById(preselectedDealId!).then((r) => r.data),
+    enabled: Boolean(preselectedDealId) && !isEdit,
+  });
+
   const { data: activity, isLoading } = useQuery({
     queryKey: ['activity', id],
     queryFn: () => activityAPI.getById(id!).then((r) => r.data),
     enabled: isEdit,
   });
+
+  // Pre-fill deal and its organization from URL parameter
+  useEffect(() => {
+    if (preselectedDeal && !isEdit) {
+      setFormData(prev => ({ ...prev, relatedDealId: preselectedDeal.id }));
+      const orgId = preselectedDeal.organization?.id || preselectedDeal.organizationId;
+      if (orgId) {
+        setSelectedOrganizations(prev => prev.includes(orgId) ? prev : [orgId]);
+      }
+    }
+  }, [preselectedDeal, isEdit]);
 
   useEffect(() => {
     if (activity) {
@@ -145,7 +166,12 @@ export default function ActivityForm() {
     mutationFn: (data: any) => activityAPI.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
-      navigate('/activities');
+      queryClient.invalidateQueries({ queryKey: ['deal-activities', preselectedDealId] });
+      if (preselectedDealId) {
+        navigate(`/deals/${preselectedDealId}`);
+      } else {
+        navigate('/activities');
+      }
     },
     onError: (error: any) => {
       alert('Error creating activity: ' + (error.response?.data?.message || error.message));
@@ -320,7 +346,15 @@ export default function ActivityForm() {
           </button>
           <button
             type="button"
-            onClick={() => navigate(isEdit ? `/activities/${id}` : '/activities')}
+            onClick={() => {
+              if (isEdit) {
+                navigate(`/activities/${id}`);
+              } else if (preselectedDealId) {
+                navigate(`/deals/${preselectedDealId}`);
+              } else {
+                navigate('/activities');
+              }
+            }}
             className="px-4 py-2 border border-dark-700 rounded-md text-gray-300 card hover:bg-dark-900 transition-colors"
           >
             Cancel
