@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { organizationAPI, userAPI } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import UserSelect from '../components/UserSelect';
 
 export default function OrganizationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const isEdit = Boolean(id);
 
   const [formData, setFormData] = useState({
@@ -17,7 +19,7 @@ export default function OrganizationForm() {
     city: '',
     zip: '',
     country: '',
-    ownerUserId: '',
+    ownerUserId: user?.id || '',
   });
 
   const [duplicates, setDuplicates] = useState<any[]>([]);

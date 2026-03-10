@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { contactAPI, organizationAPI, userAPI, adminAPI } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import UserSelect from '../components/UserSelect';
 import OrganizationSelect from '../components/OrganizationSelect';
 import RoleSelect from '../components/RoleSelect';
@@ -21,6 +22,7 @@ export default function ContactForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
   const preselectedOrgId = searchParams.get('organizationId');
@@ -31,7 +33,7 @@ export default function ContactForm() {
     jobTitle: '',
     contactRole: '',
     primaryOrganizationId: '',
-    ownerUserId: '',
+    ownerUserId: user?.id || '',
   });
 
   const [emails, setEmails] = useState<Email[]>([{ email: '', isPrimary: true }]);

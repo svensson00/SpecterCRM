@@ -166,18 +166,18 @@ describe('csv utilities', () => {
   });
 
   describe('exportToCSV', () => {
-    let alertSpy: ReturnType<typeof vi.spyOn>;
-    let createElementSpy: ReturnType<typeof vi.spyOn>;
+    let alertSpy: any;
+    let createElementSpy: any;
     let createObjectURLSpy: ReturnType<typeof vi.fn>;
-    let appendChildSpy: ReturnType<typeof vi.spyOn>;
-    let removeChildSpy: ReturnType<typeof vi.spyOn>;
+    let appendChildSpy: any;
+    let removeChildSpy: any;
 
     beforeEach(() => {
       alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
       createElementSpy = vi.spyOn(document, 'createElement');
       // Mock URL.createObjectURL which doesn't exist in jsdom
       createObjectURLSpy = vi.fn().mockReturnValue('blob:mock-url');
-      global.URL.createObjectURL = createObjectURLSpy;
+      (globalThis as any).URL.createObjectURL = createObjectURLSpy;
       appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any);
       removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any);
     });

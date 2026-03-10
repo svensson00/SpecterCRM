@@ -36,6 +36,14 @@ vi.mock('../../lib/api', () => ({
   adminAPI: mockAdminAPI.adminAPI,
 }));
 
+vi.mock('../../contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'test-user-id', email: 'test@demo.com', firstName: 'Test', lastName: 'User', role: 'ADMIN', tenantId: 'test-tenant-id' },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
