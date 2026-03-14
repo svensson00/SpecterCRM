@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/database';
-import { verifyPassword, generateAccessToken, hashToken, JWTPayload } from '../utils/auth';
+import { verifyPassword, generateAccessToken, hashToken, JWTPayload, getAccessTokenTtlSeconds } from '../utils/auth';
 import { AppError } from '../middleware/errorHandler';
 
 interface ClientRegistrationData {
@@ -242,7 +242,7 @@ export class OAuthService {
     return {
       access_token: accessToken,
       token_type: 'bearer',
-      expires_in: 900, // 15 minutes
+      expires_in: getAccessTokenTtlSeconds(),
       refresh_token: refreshToken,
       scope: authCode.scope || 'crm:read crm:write',
     };
@@ -314,7 +314,7 @@ export class OAuthService {
     return {
       access_token: accessToken,
       token_type: 'bearer',
-      expires_in: 900,
+      expires_in: getAccessTokenTtlSeconds(),
       refresh_token: newRefreshToken,
       scope: storedToken.scope || 'crm:read crm:write',
     };

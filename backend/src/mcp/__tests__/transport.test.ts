@@ -8,6 +8,7 @@ const mockVerifyAccessToken = vi.hoisted(() => vi.fn());
 vi.mock('../../utils/auth', () => ({
   verifyAccessToken: mockVerifyAccessToken,
   generateAccessToken: vi.fn(),
+  getAccessTokenTtlSeconds: vi.fn(() => 900),
   JWTPayload: undefined, // Type export
 }));
 
@@ -119,7 +120,7 @@ describe('MCP Transport', () => {
       expect(res.status).toBe(200);
     });
 
-    it('should return 400 when session ID is provided but not found', async () => {
+    it('should return 404 when session ID is provided but not found', async () => {
       const mockAuth: JWTPayload = {
         userId: 'user-1',
         tenantId: 'tenant-1',
@@ -134,7 +135,7 @@ describe('MCP Transport', () => {
         .set('Authorization', 'Bearer valid-token')
         .set('mcp-session-id', 'nonexistent-session');
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
       expect(res.body).toHaveProperty('error', 'Session not found');
     });
 

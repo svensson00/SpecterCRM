@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { TokenExpiredError } from 'jsonwebtoken';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { verifyAccessToken, JWTPayload } from '../utils/auth';
+import { verifyAccessToken, JWTPayload, getAccessTokenTtlSeconds } from '../utils/auth';
 import { logger } from '../utils/logger';
 import { createMcpServer } from './server';
 
@@ -16,13 +16,17 @@ interface McpSession {
 
 const sessions = new Map<string, McpSession>();
 
-// Session timeout: 30 minutes.
-// NOTE: This intentionally exceeds the default access token TTL (JWT_EXPIRES_IN = 15m)
-// so that sessions survive long enough for a client to refresh its token and continue
-// the same MCP conversation. In production, set JWT_EXPIRES_IN >= SESSION_TIMEOUT_MS
-// (e.g. JWT_EXPIRES_IN=35m) to prevent token expiry mid-session. See ADR-001.
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+// Session timeout (configurable via MCP_SESSION_TIMEOUT_MS, default 30 minutes).
+// Should be less than the JWT access token TTL so tokens don't expire mid-session.
+const SESSION_TIMEOUT_MS = parseInt(process.env.MCP_SESSION_TIMEOUT_MS || '1800000', 10);
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
+
+// Startup validation: log config and warn on mismatches
+const jwtTtlSeconds = getAccessTokenTtlSeconds();
+logger.info(`MCP config: session timeout=${SESSION_TIMEOUT_MS}ms (${(SESSION_TIMEOUT_MS / 60000).toFixed(0)}min), JWT TTL=${jwtTtlSeconds}s (${(jwtTtlSeconds / 60).toFixed(0)}min), cleanup interval=${(CLEANUP_INTERVAL_MS / 60000).toFixed(0)}min`);
+if (jwtTtlSeconds * 1000 < SESSION_TIMEOUT_MS) {
+  logger.warn(`JWT TTL (${jwtTtlSeconds}s) is less than MCP session timeout (${SESSION_TIMEOUT_MS / 1000}s). Tokens may expire mid-session, requiring client token refresh.`);
+}
 
 /**
  * Discriminated union result from JWT extraction / verification.
@@ -140,7 +144,8 @@ export function createMcpRouter(): Router {
         // Look up existing session
         session = sessions.get(sessionId)!;
         if (!session) {
-          res.status(400).json({ error: 'Session not found' });
+          logger.warn(`MCP session not found on POST: ${sessionId}. Active sessions: ${sessions.size}`);
+          res.status(404).json({ error: 'Session not found' });
           return;
         }
 
@@ -194,6 +199,7 @@ export function createMcpRouter(): Router {
       const auth = authResult.payload;
       const session = sessions.get(sessionId);
       if (!session) {
+        logger.warn(`MCP session not found on GET: ${sessionId}. Active sessions: ${sessions.size}`);
         res.status(404).json({ error: 'Session not found' });
         return;
       }
@@ -243,6 +249,7 @@ export function createMcpRouter(): Router {
       const auth = authResult.payload;
       const session = sessions.get(sessionId);
       if (!session) {
+        logger.warn(`MCP session not found on DELETE: ${sessionId}. Active sessions: ${sessions.size}`);
         res.status(404).json({ error: 'Session not found' });
         return;
       }
