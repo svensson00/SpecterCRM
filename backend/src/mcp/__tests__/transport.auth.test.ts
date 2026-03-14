@@ -19,6 +19,7 @@ const mockVerifyAccessToken = vi.hoisted(() => vi.fn());
 vi.mock('../../utils/auth', () => ({
   verifyAccessToken: mockVerifyAccessToken,
   generateAccessToken: vi.fn(),
+  getAccessTokenTtlSeconds: vi.fn(() => 900),
   // JWTPayload is a TypeScript interface — no runtime value needed
 }));
 
@@ -421,8 +422,8 @@ describe('MCP Transport — Authentication Fixes', () => {
         .set('Authorization', 'Bearer fresh-token')
         .set('mcp-session-id', sessionId);
 
-      // Session still exists so we must NOT receive 400 "Session not found"
-      expect(freshRes.status).not.toBe(400);
+      // Session still exists so we must NOT receive 404 "Session not found"
+      expect(freshRes.status).not.toBe(404);
       // The mock transport returns 200 for authenticated requests to live sessions
       expect(freshRes.status).toBe(200);
     });

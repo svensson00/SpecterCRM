@@ -8,6 +8,8 @@ import {
   verifyRefreshToken,
   hashToken,
   generatePasswordResetToken,
+  parseDurationToSeconds,
+  getAccessTokenTtlSeconds,
   type JWTPayload,
 } from '../auth';
 import jwt from 'jsonwebtoken';
@@ -203,6 +205,53 @@ describe('auth utils', () => {
 
       // Hex only contains 0-9 and a-f
       expect(token).toMatch(/^[0-9a-f]{64}$/);
+    });
+  });
+
+  describe('parseDurationToSeconds', () => {
+    it('should parse minutes', () => {
+      expect(parseDurationToSeconds('15m')).toBe(900);
+    });
+
+    it('should parse hours', () => {
+      expect(parseDurationToSeconds('8h')).toBe(28800);
+    });
+
+    it('should parse days', () => {
+      expect(parseDurationToSeconds('1d')).toBe(86400);
+    });
+
+    it('should parse seconds', () => {
+      expect(parseDurationToSeconds('30s')).toBe(30);
+    });
+
+    it('should parse bare numbers as seconds', () => {
+      expect(parseDurationToSeconds('3600')).toBe(3600);
+    });
+
+    it('should handle whitespace', () => {
+      expect(parseDurationToSeconds('  15m  ')).toBe(900);
+    });
+
+    it('should return 900 for unparseable input', () => {
+      expect(parseDurationToSeconds('bogus')).toBe(900);
+      expect(parseDurationToSeconds('')).toBe(900);
+    });
+  });
+
+  describe('getAccessTokenTtlSeconds', () => {
+    it('should read from JWT_EXPIRES_IN env var', () => {
+      const original = process.env.JWT_EXPIRES_IN;
+      process.env.JWT_EXPIRES_IN = '2h';
+      expect(getAccessTokenTtlSeconds()).toBe(7200);
+      process.env.JWT_EXPIRES_IN = original;
+    });
+
+    it('should default to 900 (15m) when env var is not set', () => {
+      const original = process.env.JWT_EXPIRES_IN;
+      delete process.env.JWT_EXPIRES_IN;
+      expect(getAccessTokenTtlSeconds()).toBe(900);
+      process.env.JWT_EXPIRES_IN = original;
     });
   });
 });
